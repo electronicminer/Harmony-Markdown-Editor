@@ -77,10 +77,17 @@
 
 ### 浅色模式
 
+![浅色模式 1](screen/1 (1).png)
+
+![浅色模式 2](screen/1 (3).png)
 
 ### 深色模式
 
+![深色模式 1](screen/1 (2).png)
 
+![深色模式 2](screen/1 (4).png)
+
+![应用截图](screen/1 (5).png)
 
 ---
 
@@ -135,13 +142,13 @@ Harmony-Markdown-Editor/
 
 ## 环境要求
 
-| 项目          | 要求                            |
-| ------------- | ------------------------------- |
-| 操作系统      | Windows 10/11, macOS            |
-| IDE           | DevEco Studio 5.0 及以上        |
-| SDK           | HarmonyOS SDK API 15 (5.0.3)   |
-| 运行时        | HarmonyOS                      |
-| 语言          | ArkTS (TypeScript 严格模式)     |
+| 项目     | 要求                         |
+| -------- | ---------------------------- |
+| 操作系统 | Windows 10/11, macOS         |
+| IDE      | DevEco Studio 5.0 及以上     |
+| SDK      | HarmonyOS SDK API 15 (5.0.3) |
+| 运行时   | HarmonyOS                    |
+| 语言     | ArkTS (TypeScript 严格模式)  |
 
 ---
 
@@ -250,12 +257,12 @@ DevEco Studio 内置模拟器支持快速调试：
 
 ### 兼容性说明
 
-| 平台              | 支持状态 | 备注                 |
-| ----------------- |------|--------------------|
-| HarmonyOS 手机    | 部分支持 | 未适配大小与比例           |
-| HarmonyOS 平板    | 完全支持 | 推荐在pad端使用          |
-| HarmonyOS 模拟器  | 完全支持 | 开发调试使用             |
-| Android / iOS     | 不支持  | 使用 ArkUI 原生框架，不跨平台 |
+| 平台             | 支持状态 | 备注                          |
+| ---------------- | -------- | ----------------------------- |
+| HarmonyOS 手机   | 部分支持 | 未适配大小与比例              |
+| HarmonyOS 平板   | 完全支持 | 推荐在pad端使用               |
+| HarmonyOS 模拟器 | 完全支持 | 开发调试使用                  |
+| Android / iOS    | 不支持   | 使用 ArkUI 原生框架，不跨平台 |
 
 ---
 
