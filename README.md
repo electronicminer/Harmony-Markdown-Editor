@@ -77,23 +77,10 @@
 
 ### 浅色模式
 
-<p>
-  <img src="screen/image_1.png" width="200" />
-  <img src="screen/image_2.png" width="200" />
-  <img src="screen/image_3.png" width="200" />
-  <img src="screen/image_4.png" width="200" />
-  <img src="screen/image_5.png" width="200" />
-</p>
 
 ### 深色模式
 
-<p>
-  <img src="screen/dark_image_1.png" width="200" />
-  <img src="screen/dark_image_2.png" width="200" />
-  <img src="screen/dark_image_3.png" width="200" />
-  <img src="screen/dark_image_4.png" width="200" />
-  <img src="screen/dark_image_5.png" width="200" />
-</p>
+
 
 ---
 
@@ -245,7 +232,6 @@ git clone https://github.com/electronicminer/Harmony-Markdown-Editor.git
 
 本项目专为 HarmonyOS 平台开发，支持部署到以下设备：
 
-- **手机**：运行 HarmonyOS 的华为手机（如 Mate 系列、P 系列、nova 系列等）
 - **平板**：运行 HarmonyOS 的华为平板（如 MatePad 系列），编辑器的分屏布局在大屏设备上体验更佳
 
 部署步骤：
