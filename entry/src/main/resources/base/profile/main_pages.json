@@ -1,6 +1,8 @@
 {
   "src": [
     "pages/Index",
-    "pages/Editor"
+    "pages/Editor",
+    "pages/RegisterPage",
+    "pages/PasswordResetPage"
   ]
 }

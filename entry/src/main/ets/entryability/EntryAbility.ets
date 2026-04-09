@@ -1,6 +1,9 @@
 import { AbilityConstant, UIAbility, Want, Configuration } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
+import agconnect from '@hw-agconnect/api-ohos';
+import '@hw-agconnect/core-ohos';
+import '@hw-agconnect/auth-ohos';
 
 // @Builder
 // function BlockBuilder(type: string, token: Tokens.Generic, that: ESObject) {
@@ -28,6 +31,7 @@ import { window } from '@kit.ArkUI';
 export default class EntryAbility extends UIAbility {
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     AppStorage.setOrCreate('currentColorMode', this.context.config.colorMode);
+    agconnect.instance().init(this.context);
     // markdown.init({
     //   // theme: {
     //   //   themeColor: Color.Red,

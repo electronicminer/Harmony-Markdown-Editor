@@ -776,6 +776,18 @@ struct Index {
               console.error('pushUrl error: ' + e.message);
             }
           }, true);
+
+          // 账号入口
+          this.GlassButton('👤', () => {
+            try {
+              router.pushUrl({
+                url: 'pages/RegisterPage'
+              });
+            } catch (error) {
+              const e = error as BusinessError;
+              console.error('pushUrl error: ' + e.message);
+            }
+          }, false, 20);
         }
       }
       .width('92%')

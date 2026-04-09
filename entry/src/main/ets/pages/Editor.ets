@@ -11,6 +11,8 @@ import { PreferencesUtil } from '../utils/PreferencesUtil';
 import { AIConfig, AIConfigClass } from '../utils/AIConfig';
 import { AIChatPanel } from '../components/AIChatPanel';
 import { AgentPlan } from '../utils/AIService';
+// 自动补全功能导入（已注释）
+// import { CompletionItem, filterCompletions, checkTrigger, TriggerInfo, CompletionItemType } from '../utils/MarkdownCompletions';
 
 @Entry
 @Component
@@ -32,7 +34,7 @@ struct Editor {
   @State viewMode: number = 0 // 0: Split, 1: Edit Only, 2: Preview Only
   @State followSystem: boolean = false
   @StorageProp('currentColorMode') @Watch('onSystemModeChange') currentSystemMode: number = ConfigurationConstant.ColorMode.COLOR_MODE_LIGHT
-  private autoSaveTimer: number = -1
+  private autoSaveTimer: number = -1;
   
   // 拖拽分栏权重
   @State editorWeight: number = 1
@@ -45,11 +47,19 @@ struct Editor {
   private maxHistory: number = 100
   @State canUndo: boolean = false
   @State canRedo: boolean = false
-  private typingTimer: number = -1
+  private typingTimer: number = -1;
   @State aiEnabled: boolean = false;
   private aiConfig: AIConfigClass = new AIConfigClass();
   @State aiConfigVersion: number = 0; // 用于强制触发含 config 的子组件更新
   private context: common.UIAbilityContext = {} as common.UIAbilityContext;
+
+  // ==================== 自动补全功能（已注释） ====================
+  // @State showCompletion: boolean = false;
+  // @State completions: CompletionItem[] = [];
+  // @State selectedCompletionIndex: number = 0;
+  // @State completionOffsetX: number = 0;
+  // @State completionOffsetY: number = 0;
+  // private currentTrigger: TriggerInfo | null = null;
 
   onSystemModeChange() {
     if (this.followSystem) {
@@ -164,12 +174,14 @@ struct Editor {
   aboutToDisappear() {
     if (this.autoSaveTimer !== -1) {
       clearInterval(this.autoSaveTimer);
+      this.autoSaveTimer = -1;
     }
   }
 
   startAutoSave() {
     if (this.autoSaveTimer !== -1) {
       clearInterval(this.autoSaveTimer);
+      this.autoSaveTimer = -1;
     }
     if (this.autoSave && this.autoSaveInterval > 0) {
       this.autoSaveTimer = setInterval(() => {
@@ -236,10 +248,10 @@ struct Editor {
     const start = this.selectionStart;
     const end = this.selectionEnd;
     const currentText = this.markdownText;
-    
+
     const before = currentText.substring(0, start);
     const after = currentText.substring(end);
-    
+
     const newText = before + text + after;
     this.markdownText = newText;
     this.recordHistory(newText);
@@ -248,6 +260,11 @@ struct Editor {
     this.selectionEnd = this.selectionStart;
     this.controller.caretPosition(this.selectionStart);
   }
+
+  // ==================== 自动补全功能（已整体注释禁用） ====================
+  // checkAndShowCompletion / updateCompletionPosition / hideCompletion /
+  // applyCompletion / completionUp / completionDown / completionConfirm /
+  // getCompletionIcon 已禁用，避免影响现有编辑与预览主流程。
 
   applyFormat(prefix: string, suffix: string) {
     const start = this.selectionStart;
@@ -421,7 +438,7 @@ struct Editor {
     .backgroundColor('transparent')
     .gesture(
       PanGesture({ direction: PanDirection.Horizontal })
-        .onActionUpdate((event: GestureEvent) => {
+        .onActionUpdate((event) => {
           onDrag(event.offsetX)
         })
     )
@@ -490,7 +507,7 @@ struct Editor {
           // 第一列：左侧编辑区域
           if (this.viewMode === 0 || this.viewMode === 1) {
             Column() {
-              TextArea({ 
+              TextArea({
                   text: this.markdownText,
                   controller: this.controller
                 })
@@ -499,18 +516,25 @@ struct Editor {
                 if (this.markdownText !== value) {
                   this.markdownText = value
                   this.updateCounts(value)
-                  
+
                   if (this.typingTimer !== -1) {
                     clearTimeout(this.typingTimer)
                   }
                   this.typingTimer = setTimeout(() => {
                     this.recordHistory(value)
                   }, 800)
+
+                  // 自动补全逻辑已禁用
                 }
               })
               .onTextSelectionChange((selectionStart: number, selectionEnd: number) => {
                 this.selectionStart = selectionStart
                 this.selectionEnd = selectionEnd
+                // 自动补全逻辑已禁用
+              })
+              .onKeyEvent((_event) => {
+                // 自动补全快捷键和导航已禁用
+                return false;
               })
               .width('100%')
               .height('100%')
@@ -664,6 +688,8 @@ struct Editor {
       }
       .width('100%')
       .height('100%')
+
+      // 补全弹窗组件已注释禁用
 
       // 顶层：合并导航栏 + 工具栏为单行胶囊
       Column() {

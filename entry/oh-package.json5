@@ -6,7 +6,10 @@
   "author": "",
   "license": "",
   "dependencies": {
-    '@lidary/markdown': "file:../Markdown"
+    '@lidary/markdown': "file:../Markdown",
+    "@hw-agconnect/api-ohos": "^1.x.x",
+    "@hw-agconnect/auth-ohos": "^1.x.x",
+    "@hw-agconnect/core-ohos": "^1.x.x"
   }
 }
 
