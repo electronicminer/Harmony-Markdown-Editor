@@ -1,5 +1,5 @@
 import { ChatMessage, AIService, AIResponse, AgentPlan } from '../utils/AIService';
-import { AIConfigClass } from '../utils/AIConfig';
+import { AIConfigClass, AIConfig } from '../utils/AIConfig';
 import { common } from '@kit.AbilityKit';
 import { promptAction } from '@kit.ArkUI';
 
@@ -44,6 +44,7 @@ export struct AIChatPanel {
 
   onConfigChange() {
     // 强制触发组件更新的空跑方法，ArkUI 的机制中，只要有被 Watch 监听到就会触发渲染树更新
+    this.aiConfig = AIConfig.getConfig();
   }
 
   aboutToAppear() {
@@ -63,6 +64,8 @@ export struct AIChatPanel {
     if (!this.inputText.trim() || this.isLoading) {
       return;
     }
+
+    this.aiConfig = AIConfig.getConfig();
 
     if (!this.aiConfig || !AIConfigClass.isConfigValid(this.aiConfig)) {
       promptAction.showToast({

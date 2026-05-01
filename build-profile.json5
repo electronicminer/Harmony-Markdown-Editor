@@ -3,7 +3,6 @@
     "products": [
       {
         "name": "default",
-        "signingConfig": "default",
         "compatibleSdkVersion": "5.0.3(15)",
         "runtimeOS": "HarmonyOS",
         "buildOption": {
@@ -22,21 +21,7 @@
         "name": "release"
       }
     ],
-    "signingConfigs": [
-      {
-        "name": "default",
-        "type": "HarmonyOS",
-        "material": {
-          "certpath": "C:\\Users\\XH\\.ohos\\config\\default_Harmony-Markdown-Editor_AYWgI6P45gT3ChnMJpO14xw98ToiX8AjXFLuyWy1Ahs=.cer",
-          "keyAlias": "debugKey",
-          "keyPassword": "0000001BBC8A39B92783C7CF23EE160EFA6DF32DA64FFF6ACEB9A3BFA83E48811FD96AA9C051E2686F1330",
-          "profile": "C:\\Users\\XH\\.ohos\\config\\default_Harmony-Markdown-Editor_AYWgI6P45gT3ChnMJpO14xw98ToiX8AjXFLuyWy1Ahs=.p7b",
-          "signAlg": "SHA256withECDSA",
-          "storeFile": "C:\\Users\\XH\\.ohos\\config\\default_Harmony-Markdown-Editor_AYWgI6P45gT3ChnMJpO14xw98ToiX8AjXFLuyWy1Ahs=.p12",
-          "storePassword": "0000001B2E21F352B1F295D2BEC1DF3F0C0435FEF7C29B3A99A78C4F0BDEAEC1BF5E1DD9136B560FDA6110"
-        }
-      }
-    ]
+    "signingConfigs": []
   },
   "modules": [
     {

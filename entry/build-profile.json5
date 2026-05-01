@@ -19,10 +19,24 @@
   ],
   "targets": [
     {
-      "name": "default"
+      "name": "default",
+      "config": {
+        "deviceType": [
+          "phone",
+          "tablet",
+          "2in1"
+        ]
+      }
     },
     {
       "name": "ohosTest",
+      "config": {
+        "deviceType": [
+          "phone",
+          "tablet",
+          "2in1"
+        ]
+      }
     }
   ],
 
