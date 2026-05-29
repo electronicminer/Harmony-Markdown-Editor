@@ -3,6 +3,7 @@
     "pages/Index",
     "pages/Editor",
     "pages/RegisterPage",
-    "pages/PasswordResetPage"
+    "pages/PasswordResetPage",
+    "pages/ProfilePage"
   ]
 }

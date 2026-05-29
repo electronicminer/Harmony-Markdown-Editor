@@ -1,4 +1,3 @@
-import { ConfigurationConstant } from '@kit.AbilityKit';
 import { promptAction, router } from '@kit.ArkUI';
 import { AuthActionResult, AuthService } from '../utils/AuthService';
 
@@ -12,22 +11,15 @@ struct PasswordResetPage {
   @State isSendingCode: boolean = false;
   @State isSubmitting: boolean = false;
   @State countdown: number = 0;
-  @State isDark: boolean = false;
-  @StorageProp('currentColorMode') @Watch('syncTheme') currentSystemMode: number = ConfigurationConstant.ColorMode.COLOR_MODE_LIGHT;
 
   private countdownTimer: number = -1;
 
   aboutToAppear(): void {
-    this.syncTheme();
     this.loadUserEmail();
   }
 
   aboutToDisappear(): void {
     this.stopCountdown();
-  }
-
-  syncTheme(): void {
-    this.isDark = this.currentSystemMode === ConfigurationConstant.ColorMode.COLOR_MODE_DARK;
   }
 
   async loadUserEmail(): Promise<void> {
@@ -113,15 +105,15 @@ struct PasswordResetPage {
       Text(label)
         .fontSize(13)
         .fontWeight(FontWeight.Medium)
-        .fontColor(this.isDark ? '#99FFFFFF' : '#99000000')
+        .fontColor('#99000000')
 
       TextInput({ text: value, placeholder: placeholder })
         .fontSize(15)
         .height(48)
         .type(isPassword ? InputType.Password : InputType.Normal)
-        .fontColor(this.isDark ? '#E5FFFFFF' : '#E5000000')
-        .placeholderColor(this.isDark ? '#66FFFFFF' : '#66000000')
-        .backgroundColor(this.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)')
+        .fontColor('#E5000000')
+        .placeholderColor('#66000000')
+        .backgroundColor('rgba(10,89,247,0.04)')
         .borderRadius(16)
         .padding({ left: 16, right: 16 })
         .enabled(enabled)
@@ -138,17 +130,16 @@ struct PasswordResetPage {
         Column() {
           Row().height(100).width('100%')
 
-          // 修改密码卡片
           Column({ space: 0 }) {
             Column({ space: 8 }) {
               Text('修改密码')
                 .fontSize(28)
                 .fontWeight(FontWeight.Bold)
-                .fontColor(this.isDark ? '#E5FFFFFF' : '#E5000000')
+                .fontColor('#E5000000')
 
               Text('通过验证码验证身份后设置新密码')
                 .fontSize(14)
-                .fontColor(this.isDark ? '#99FFFFFF' : '#99000000')
+                .fontColor('#99000000')
             }
             .width('100%')
             .alignItems(HorizontalAlign.Start)
@@ -178,12 +169,9 @@ struct PasswordResetPage {
                 Button(this.isSendingCode ? '发送中...' : this.countdown > 0 ? `${this.countdown}s` : '发送验证码')
                   .fontSize(14)
                   .fontWeight(FontWeight.Medium)
-                  .fontColor(this.countdown > 0 || this.isSendingCode
-                    ? (this.isDark ? '#66FFFFFF' : '#8090A6')
-                    : (this.isDark ? '#E5FFFFFF' : '#0A59F7'))
+                  .fontColor(this.countdown > 0 || this.isSendingCode ? '#8090A6' : '#0A59F7')
                   .backgroundColor(this.countdown > 0 || this.isSendingCode
-                    ? (this.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)')
-                    : (this.isDark ? 'rgba(10,89,247,0.2)' : 'rgba(10,89,247,0.1)'))
+                    ? 'rgba(0,0,0,0.04)' : 'rgba(10,89,247,0.1)')
                   .type(ButtonType.Capsule)
                   .height(48)
                   .layoutWeight(1)
@@ -209,20 +197,18 @@ struct PasswordResetPage {
           .width('92%')
           .padding({ left: 24, right: 24, top: 24, bottom: 24 })
           .borderRadius(32)
-          .backgroundColor(this.isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(255, 255, 255, 0.65)')
+          .backgroundColor('rgba(240, 244, 255, 0.85)')
           .backdropBlur(80)
-          .shadow(this.isDark
-            ? { radius: 32, color: 'rgba(0,0,0,0.4)', offsetY: 8 }
-            : { radius: 32, color: 'rgba(0,0,0,0.08)', offsetY: 8 })
+          .shadow({ radius: 32, color: 'rgba(10,89,247,0.06)', offsetY: 8 })
 
           Column({ space: 6 }) {
             Text('鸿蒙 Markdown')
               .fontSize(13)
               .fontWeight(FontWeight.Medium)
-              .fontColor(this.isDark ? '#33FFFFFF' : '#33000000')
+              .fontColor('#33000000')
             Text('Powered by HarmonyOS NEXT')
               .fontSize(11)
-              .fontColor(this.isDark ? '#1AFFFFFF' : '#1A000000')
+              .fontColor('#1A000000')
           }
           .width('100%')
           .margin({ top: 32, bottom: 40 })
@@ -232,7 +218,7 @@ struct PasswordResetPage {
       }
       .width('100%')
       .height('100%')
-      .backgroundColor(this.isDark ? '#000000' : '#F1F3F5')
+      .backgroundColor('#FFFFFF')
       .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP, SafeAreaEdge.BOTTOM])
       .scrollBar(BarState.Off)
 
@@ -242,19 +228,19 @@ struct PasswordResetPage {
           .fontSize(20)
           .fontWeight(FontWeight.Bold)
           .fontFamily('HarmonyOS Sans')
-          .fontColor(this.isDark ? '#E5FFFFFF' : '#E5000000')
+          .fontColor('#E5000000')
           .layoutWeight(1)
 
         Row({ space: 12 }) {
           Button({ type: ButtonType.Circle, stateEffect: true }) {
             Text('←')
               .fontSize(20)
-              .fontColor(this.isDark ? '#E5FFFFFF' : '#E5000000')
+              .fontColor('#E5000000')
               .fontWeight(FontWeight.Medium)
           }
           .width(44)
           .height(44)
-          .backgroundColor(this.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)')
+          .backgroundColor('rgba(0, 0, 0, 0.05)')
           .backdropBlur(50)
           .shadow(ShadowStyle.OUTER_DEFAULT_XS)
           .onClick(() => router.back())
@@ -264,7 +250,7 @@ struct PasswordResetPage {
       .padding({ left: 24, right: 24, top: 16, bottom: 16 })
       .margin({ top: 24 })
       .borderRadius(32)
-      .backgroundColor(this.isDark ? 'rgba(0, 0, 0, 0.4)' : 'rgba(241, 243, 245, 0.5)')
+      .backgroundColor('rgba(240, 244, 255, 0.7)')
       .backdropBlur(80)
       .justifyContent(FlexAlign.SpaceBetween)
       .alignItems(VerticalAlign.Center)

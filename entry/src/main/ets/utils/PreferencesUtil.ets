@@ -18,6 +18,11 @@ export class PreferencesUtil {
   private static readonly KEY_AI_SYSTEM_PROMPT = 'aiSystemPrompt';
   private static readonly KEY_AI_ENABLED = 'aiEnabled';
 
+  // Profile Keys
+  private static readonly KEY_PROFILE_NICKNAME = 'profileNickname';
+  private static readonly KEY_PROFILE_BIO = 'profileBio';
+  private static readonly KEY_PROFILE_AVATAR_COLOR = 'profileAvatarColor';
+
   static async getPreferences(context: common.UIAbilityContext): Promise<preferences.Preferences> {
     return await preferences.getPreferences(context, PreferencesUtil.PREFERENCES_NAME);
   }
@@ -153,5 +158,39 @@ export class PreferencesUtil {
   static async getAIConfigEnabled(context: common.UIAbilityContext): Promise<boolean> {
     const prefs = await PreferencesUtil.getPreferences(context);
     return await prefs.get(PreferencesUtil.KEY_AI_ENABLED, false) as boolean;
+  }
+
+  // Profile Methods
+  static async saveProfileNickname(context: common.UIAbilityContext, nickname: string) {
+    const prefs = await PreferencesUtil.getPreferences(context);
+    await prefs.put(PreferencesUtil.KEY_PROFILE_NICKNAME, nickname);
+    await prefs.flush();
+  }
+
+  static async getProfileNickname(context: common.UIAbilityContext): Promise<string> {
+    const prefs = await PreferencesUtil.getPreferences(context);
+    return await prefs.get(PreferencesUtil.KEY_PROFILE_NICKNAME, '') as string;
+  }
+
+  static async saveProfileBio(context: common.UIAbilityContext, bio: string) {
+    const prefs = await PreferencesUtil.getPreferences(context);
+    await prefs.put(PreferencesUtil.KEY_PROFILE_BIO, bio);
+    await prefs.flush();
+  }
+
+  static async getProfileBio(context: common.UIAbilityContext): Promise<string> {
+    const prefs = await PreferencesUtil.getPreferences(context);
+    return await prefs.get(PreferencesUtil.KEY_PROFILE_BIO, '') as string;
+  }
+
+  static async saveProfileAvatarColor(context: common.UIAbilityContext, color: string) {
+    const prefs = await PreferencesUtil.getPreferences(context);
+    await prefs.put(PreferencesUtil.KEY_PROFILE_AVATAR_COLOR, color);
+    await prefs.flush();
+  }
+
+  static async getProfileAvatarColor(context: common.UIAbilityContext): Promise<string> {
+    const prefs = await PreferencesUtil.getPreferences(context);
+    return await prefs.get(PreferencesUtil.KEY_PROFILE_AVATAR_COLOR, '#0A59F7') as string;
   }
 }

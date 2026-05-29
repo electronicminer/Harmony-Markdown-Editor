@@ -1,6 +1,7 @@
-import { ConfigurationConstant } from '@kit.AbilityKit';
+import { common, ConfigurationConstant } from '@kit.AbilityKit';
 import { promptAction, router } from '@kit.ArkUI';
 import { AuthActionResult, AuthService, CurrentUserInfo } from '../utils/AuthService';
+import { PreferencesUtil } from '../utils/PreferencesUtil';
 
 @Entry
 @Component
@@ -16,11 +17,22 @@ struct RegisterPage {
   @State showRegistrationForm: boolean = false;
   @State isLoginMode: boolean = false;
   @State passwordStrength: number = 0;
+  @State profileNickname: string = '';
+  @State profileBio: string = '';
+  @State profileAvatarColor: string = '#0A59F7';
+
+  private context = getContext(this) as common.UIAbilityContext;
 
   private countdownTimer: number = -1;
 
   aboutToAppear(): void {
     this.loadCurrentUser();
+  }
+
+  onPageShow(): void {
+    if (this.currentUser) {
+      this.loadProfile();
+    }
   }
 
   aboutToDisappear(): void {
@@ -40,7 +52,14 @@ struct RegisterPage {
     this.currentUser = await AuthService.getCurrentUser();
     if (this.currentUser) {
       this.showRegistrationForm = false;
+      await this.loadProfile();
     }
+  }
+
+  async loadProfile(): Promise<void> {
+    this.profileNickname = await PreferencesUtil.getProfileNickname(this.context);
+    this.profileBio = await PreferencesUtil.getProfileBio(this.context);
+    this.profileAvatarColor = await PreferencesUtil.getProfileAvatarColor(this.context);
   }
 
   async handlePasswordSettings(): Promise<void> {
@@ -327,7 +346,8 @@ struct RegisterPage {
     Column({ space: 0 }) {
       Row({ space: 14 }) {
         Column() {
-          Text(this.currentUser?.email?.charAt(0)?.toUpperCase() || 'U')
+          Text(this.profileNickname ? this.profileNickname.charAt(0).toUpperCase() :
+            this.currentUser?.email?.charAt(0)?.toUpperCase() || 'U')
             .fontSize(24)
             .fontWeight(FontWeight.Bold)
             .fontColor(Color.White)
@@ -335,25 +355,33 @@ struct RegisterPage {
         .width(56)
         .height(56)
         .borderRadius(16)
-        .backgroundColor('#0A59F7')
+        .backgroundColor(this.profileAvatarColor)
         .justifyContent(FlexAlign.Center)
-        .shadow({ radius: 12, color: 'rgba(10,89,247,0.4)', offsetY: 4 })
+        .shadow({ radius: 12, color: `${this.profileAvatarColor}66`, offsetY: 4 })
 
         Column({ space: 4 }) {
-          Text(this.currentUser?.email || '未知用户')
+          Text(this.profileNickname || this.currentUser?.email || '未知用户')
             .fontSize(17)
             .fontWeight(FontWeight.Medium)
             .fontColor('#E5000000')
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-          Text('已登录')
-            .fontSize(11)
-            .fontColor('#00A854')
-            .fontWeight(FontWeight.Medium)
-            .padding({ left: 8, right: 8, top: 2, bottom: 2 })
-            .borderRadius(6)
-            .backgroundColor('rgba(0,168,84,0.1)')
+          if (this.profileBio) {
+            Text(this.profileBio)
+              .fontSize(12)
+              .fontColor('#99000000')
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          } else {
+            Text('已登录')
+              .fontSize(11)
+              .fontColor('#00A854')
+              .fontWeight(FontWeight.Medium)
+              .padding({ left: 8, right: 8, top: 2, bottom: 2 })
+              .borderRadius(6)
+              .backgroundColor('rgba(0,168,84,0.1)')
+          }
         }
         .alignItems(HorizontalAlign.Start)
         .layoutWeight(1)
@@ -389,7 +417,7 @@ struct RegisterPage {
       Divider().color('rgba(10,89,247,0.06)').margin({ left: 54 })
 
       this.GlassMenuItem('✏️', '自定义个人资料', '头像、昵称设置', () => {
-        promptAction.showToast({ message: '功能开发中' });
+        router.pushUrl({ url: 'pages/ProfilePage' });
       })
 
       Divider().color('rgba(10,89,247,0.06)').margin({ left: 54 })
