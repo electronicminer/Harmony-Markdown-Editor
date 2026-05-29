@@ -11,6 +11,9 @@ import { PreferencesUtil } from '../utils/PreferencesUtil';
 import { AIConfig, AIConfigClass } from '../utils/AIConfig';
 import { AIChatPanel } from '../components/AIChatPanel';
 import { AgentPlan } from '../utils/AIService';
+import { CloudDBService } from '../utils/CloudDBService';
+import { UserDocument } from '../models/UserDocument';
+import { ShareDialog } from '../components/ShareDialog';
 // 自动补全功能导入（已注释）
 // import { CompletionItem, filterCompletions, checkTrigger, TriggerInfo, CompletionItemType } from '../utils/MarkdownCompletions';
 
@@ -53,6 +56,21 @@ struct Editor {
   @State aiConfigVersion: number = 0; // 用于强制触发含 config 的子组件更新
   private context: common.UIAbilityContext = {} as common.UIAbilityContext;
 
+  // 云文档
+  @State cloudDocId: string = '';
+  @State isCloudSyncing: boolean = false;
+  @State cloudDocForShare: UserDocument = new UserDocument();
+  private shareDialogController: CustomDialogController = new CustomDialogController({
+    builder: ShareDialog({
+      doc: this.cloudDocForShare,
+      isDark: this.isDark,
+      onRefresh: () => {}
+    }),
+    autoCancel: true,
+    alignment: DialogAlignment.Center,
+    customStyle: true
+  });
+
   // ==================== 自动补全功能（已注释） ====================
   // @State showCompletion: boolean = false;
   // @State completions: CompletionItem[] = [];
@@ -81,6 +99,9 @@ struct Editor {
       }
       if (params['viewMode'] !== undefined) {
         this.viewMode = params['viewMode'] as number;
+      }
+      if (params['cloudDocId']) {
+        this.cloudDocId = params['cloudDocId'] as string;
       }
     } else {
       // 如果没有参数，尝试从偏好设置加载主题
@@ -352,6 +373,45 @@ struct Editor {
         message: '保存失败',
         duration: 1500
       });
+    }
+  }
+
+  async cloudSave(): Promise<void> {
+    const user = await (await import('../utils/AuthService')).AuthService.getCurrentUser();
+    if (!user) {
+      promptAction.showToast({ message: '请先登录后再上传到云端', duration: 2000 });
+      return;
+    }
+
+    this.isCloudSyncing = true;
+    const doc = new UserDocument();
+    doc.id = this.cloudDocId;
+    doc.content = this.markdownText;
+    doc.title = this.markdownText.split('\n')[0]?.replace(/^#+\s*/, '').trim() || 'Untitled';
+
+    const result = await CloudDBService.saveDocument(doc);
+    this.isCloudSyncing = false;
+
+    if (result.success && result.data) {
+      const savedDoc = result.data as UserDocument;
+      this.cloudDocId = savedDoc.id;
+      promptAction.showToast({ message: result.message, duration: 1500 });
+    } else {
+      promptAction.showToast({ message: result.message, duration: 2000 });
+    }
+  }
+
+  async openShareDialog(): Promise<void> {
+    if (!this.cloudDocId) {
+      promptAction.showToast({ message: '请先保存到云端', duration: 2000 });
+      return;
+    }
+    const doc = await CloudDBService.getDocumentById(this.cloudDocId);
+    if (doc) {
+      this.cloudDocForShare = doc;
+      this.shareDialogController.open();
+    } else {
+      promptAction.showToast({ message: '未找到云端文档', duration: 2000 });
     }
   }
 
@@ -753,6 +813,12 @@ struct Editor {
             })
             this.GlassIconButton('💾', () => {
               this.saveFile()
+            })
+            this.GlassIconButton(this.isCloudSyncing ? '⏳' : '☁️', () => {
+              this.cloudSave()
+            })
+            this.GlassIconButton('🔗', () => {
+              this.openShareDialog()
             })
             this.GlassIconButton(this.isDark ? '☀️' : '🌙', () => {
               const context = getContext(this) as common.UIAbilityContext;

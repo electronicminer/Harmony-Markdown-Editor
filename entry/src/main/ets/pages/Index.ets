@@ -777,6 +777,16 @@ struct Index {
             }
           }, true);
 
+          // 云文档
+          this.GlassButton('☁️', () => {
+            try {
+              router.pushUrl({ url: 'pages/CloudDocsPage', params: { isDark: this.isDark } });
+            } catch (error) {
+              const e = error as BusinessError;
+              console.error('pushUrl error: ' + e.message);
+            }
+          }, false, 20);
+
           // 账号入口
           this.GlassButton('👤', () => {
             try {

@@ -4,6 +4,7 @@
     "pages/Editor",
     "pages/RegisterPage",
     "pages/PasswordResetPage",
-    "pages/ProfilePage"
+    "pages/ProfilePage",
+    "pages/CloudDocsPage"
   ]
 }

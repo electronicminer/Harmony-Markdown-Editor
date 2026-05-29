@@ -422,6 +422,12 @@ struct RegisterPage {
 
       Divider().color('rgba(10,89,247,0.06)').margin({ left: 54 })
 
+      this.GlassMenuItem('☁️', '云文档管理', '云端存储、分享文档', () => {
+        router.pushUrl({ url: 'pages/CloudDocsPage' });
+      })
+
+      Divider().color('rgba(10,89,247,0.06)').margin({ left: 54 })
+
       this.GlassMenuItem('➕', '添加另一个账号', '切换或绑定新账号', () => {
         this.showRegistrationForm = true;
       })

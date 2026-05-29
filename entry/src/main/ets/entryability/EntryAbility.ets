@@ -4,6 +4,7 @@ import { window } from '@kit.ArkUI';
 import agconnect from '@hw-agconnect/api-ohos';
 import '@hw-agconnect/core-ohos';
 import '@hw-agconnect/auth-ohos';
+import '@hw-agconnect/clouddb-ohos';
 
 // @Builder
 // function BlockBuilder(type: string, token: Tokens.Generic, that: ESObject) {
