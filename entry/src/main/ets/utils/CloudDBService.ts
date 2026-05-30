@@ -28,20 +28,18 @@ export class CloudDBService {
   static async init(): Promise<boolean> {
     if (CloudDBService.initialized) return true;
     try {
-      // @ts-ignore
-      const agConnectCloudDB = globalThis.requireNativeModule('agconnect.clouddb') ||
-        (await import('@hw-agconnect/clouddb-ohos'));
-      CloudDBService.cloudDB = agConnectCloudDB.AGConnectCloudDB.getInstance(
-        (await import('@hw-agconnect/api-ohos')).default.getInstance()
-      );
-      const config = {
+      const agConnectCloudDB: object = globalThis.requireNativeModule('agconnect.clouddb') as object;
+      const cloudDBModule: object = (agConnectCloudDB as Record<string, object>)['AGConnectCloudDB'] as object;
+      const apiModule: object = globalThis.requireNativeModule('agconnect.api') as object;
+      const apiInstance: object = (apiModule as Record<string, object>)['AGCApi']['instance'] as object;
+      CloudDBService.cloudDB = (cloudDBModule as Record<string, Function>)['instance'](apiInstance) as object;
+      const config: object = {
         name: ZONE_NAME,
-        accessMode: 1, // public
-        syncMode: 2, // device-cloud two-way sync
+        accessMode: 1,
+        syncMode: 2,
         persistenceEnabled: true
       };
-      // @ts-ignore
-      CloudDBService.zone = await CloudDBService.cloudDB.openCloudDBZone(config, true);
+      CloudDBService.zone = await (CloudDBService.cloudDB as Record<string, Function>)['openCloudDBZone'](config, true) as object;
       CloudDBService.initialized = true;
       return true;
     } catch (e) {
@@ -87,8 +85,7 @@ export class CloudDBService {
         isPublic: doc.isPublic,
         sharedWith: doc.sharedWith
       };
-      // @ts-ignore
-      await CloudDBService.zone.executeUpsert(cloudDoc);
+      await (CloudDBService.zone as Record<string, Function>)['executeUpsert'](cloudDoc);
       return {
         success: true,
         message: isNew ? '已上传到云端' : '已同步到云端',
@@ -108,12 +105,10 @@ export class CloudDBService {
     if (!user) return [];
 
     try {
-      // @ts-ignore
-      const query = CloudDBService.zone.createQuery();
-      query.equalTo('ownerId', user.uid);
-      query.orderByDesc('updatedAt');
-      // @ts-ignore
-      const result = await CloudDBService.zone.executeFindAll(query);
+      const query: object = (CloudDBService.zone as Record<string, Function>)['createQuery']() as object;
+      (query as Record<string, Function>)['equalTo']('ownerId', user.uid);
+      (query as Record<string, Function>)['orderByDesc']('updatedAt');
+      const result: object = await (CloudDBService.zone as Record<string, Function>)['executeFindAll'](query) as object;
       return CloudDBService.parseResults(result);
     } catch (e) {
       console.error('[CloudDB] Query my docs failed:', JSON.stringify(e));
@@ -129,12 +124,10 @@ export class CloudDBService {
     if (!user) return [];
 
     try {
-      // @ts-ignore
-      const query = CloudDBService.zone.createQuery();
-      query.notEqualTo('ownerId', user.uid);
-      query.orderByDesc('updatedAt');
-      // @ts-ignore
-      const result = await CloudDBService.zone.executeFindAll(query);
+      const query: object = (CloudDBService.zone as Record<string, Function>)['createQuery']() as object;
+      (query as Record<string, Function>)['notEqualTo']('ownerId', user.uid);
+      (query as Record<string, Function>)['orderByDesc']('updatedAt');
+      const result: object = await (CloudDBService.zone as Record<string, Function>)['executeFindAll'](query) as object;
       const allDocs = CloudDBService.parseResults(result);
       return allDocs.filter(doc => doc.isSharedWithUser(user.uid));
     } catch (e) {
@@ -148,11 +141,9 @@ export class CloudDBService {
     if (!ok || !CloudDBService.zone) return null;
 
     try {
-      // @ts-ignore
-      const query = CloudDBService.zone.createQuery();
-      query.equalTo('id', id);
-      // @ts-ignore
-      const result = await CloudDBService.zone.executeFindAll(query);
+      const query: object = (CloudDBService.zone as Record<string, Function>)['createQuery']() as object;
+      (query as Record<string, Function>)['equalTo']('id', id);
+      const result: object = await (CloudDBService.zone as Record<string, Function>)['executeFindAll'](query) as object;
       const docs = CloudDBService.parseResults(result);
       return docs.length > 0 ? docs[0] : null;
     } catch (e) {
@@ -183,8 +174,7 @@ export class CloudDBService {
         isPublic: doc.isPublic,
         sharedWith: doc.sharedWith
       };
-      // @ts-ignore
-      await CloudDBService.zone.executeDelete(cloudDoc);
+      await (CloudDBService.zone as Record<string, Function>)['executeDelete'](cloudDoc);
       return { success: true, message: '已从云端删除' };
     } catch (e) {
       console.error('[CloudDB] Delete failed:', JSON.stringify(e));
@@ -199,17 +189,10 @@ export class CloudDBService {
 
   static isAvailable(): boolean {
     try {
-      // @ts-ignore
-      const module = globalThis.requireNativeModule('agconnect.clouddb');
+      const module: object = globalThis.requireNativeModule('agconnect.clouddb') as object;
       return module !== undefined;
     } catch {
-      try {
-        // @ts-ignore
-        require('@hw-agconnect/clouddb-ohos');
-        return true;
-      } catch {
-        return false;
-      }
+      return false;
     }
   }
 

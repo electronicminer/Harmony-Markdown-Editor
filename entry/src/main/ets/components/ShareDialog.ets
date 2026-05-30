@@ -74,10 +74,9 @@ export struct ShareDialog {
             .type(ButtonType.Capsule)
             .height(36)
             .onClick(() => {
-              // @ts-ignore
-              const pasteboard = globalThis.requireModule('system.pasteboard');
+              const pasteboard: object = globalThis.requireModule('system.pasteboard') as object;
               if (pasteboard) {
-                pasteboard.setData({ data: this.doc.id, type: 'text/plain' });
+                (pasteboard as Record<string, Function>)['setData']({ data: this.doc.id, type: 'text/plain' });
               }
               promptAction.showToast({ message: '已复制文档ID', duration: 1500 });
             })

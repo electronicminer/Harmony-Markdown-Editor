@@ -47,12 +47,12 @@ struct CloudDocsPage {
     }
     this.currentUserUid = user.uid;
 
-    const [mine, shared] = await Promise.all([
+    const results = await Promise.all([
       CloudDBService.getMyDocuments(),
       CloudDBService.getSharedWithMe()
     ]);
-    this.myDocs = mine;
-    this.sharedDocs = shared;
+    this.myDocs = results[0];
+    this.sharedDocs = results[1];
     this.isLoading = false;
   }
 
