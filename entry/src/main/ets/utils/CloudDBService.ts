@@ -1,7 +1,10 @@
 import { UserDocument } from '../models/UserDocument';
 import { AuthService } from './AuthService';
+import { common } from '@kit.AbilityKit';
+import { fileIo as fs } from '@kit.CoreFileKit';
 
 const ZONE_NAME = 'HMarkdownZone';
+const DEMO_FILE_NAME = 'cloud_docs_demo.json';
 
 interface CloudDocument {
   id: string;
@@ -24,8 +27,39 @@ export class CloudDBService {
   private static initialized: boolean = false;
   private static cloudDB: object | null = null;
   private static zone: object | null = null;
+  static isDemoMode: boolean = false;
+
+  private static getContext(): common.UIAbilityContext {
+    return globalThis.appContext as common.UIAbilityContext;
+  }
+
+  private static getDemoFilePath(): string {
+    return CloudDBService.getContext().filesDir + '/' + DEMO_FILE_NAME;
+  }
+
+  private static readDemoDocs(): CloudDocument[] {
+    try {
+      const path = CloudDBService.getDemoFilePath();
+      if (!fs.accessSync(path)) return [];
+      const content = fs.readTextSync(path);
+      return JSON.parse(content) as CloudDocument[];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  private static writeDemoDocs(docs: CloudDocument[]): void {
+    const path = CloudDBService.getDemoFilePath();
+    const file = fs.openSync(path, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
+    fs.writeSync(file.fd, JSON.stringify(docs));
+    fs.closeSync(file);
+  }
 
   static async init(): Promise<boolean> {
+    if (CloudDBService.isDemoMode) {
+      CloudDBService.initialized = true;
+      return true;
+    }
     if (CloudDBService.initialized) return true;
     try {
       const agConnectCloudDB: object = globalThis.requireNativeModule('agconnect.clouddb') as object;
@@ -43,9 +77,10 @@ export class CloudDBService {
       CloudDBService.initialized = true;
       return true;
     } catch (e) {
-      console.error('[CloudDB] Init failed:', JSON.stringify(e));
-      CloudDBService.initialized = false;
-      return false;
+      console.warn('[CloudDB] Init failed, falling back to demo mode');
+      CloudDBService.isDemoMode = true;
+      CloudDBService.initialized = true;
+      return true;
     }
   }
 
@@ -57,8 +92,41 @@ export class CloudDBService {
   }
 
   static async saveDocument(doc: UserDocument): Promise<ServiceResult> {
-    const ok = await CloudDBService.ensureInit();
-    if (!ok || !CloudDBService.zone) {
+    await CloudDBService.ensureInit();
+
+    if (CloudDBService.isDemoMode) {
+      const user = await AuthService.getCurrentUser();
+      if (!user) return { success: false, message: '请先登录' };
+
+      const isNew = !doc.id;
+      if (isNew) {
+        doc.id = UserDocument.generateId();
+        doc.ownerId = user.uid;
+        doc.createdAt = Date.now();
+      }
+      doc.updatedAt = Date.now();
+
+      try {
+        const docs = CloudDBService.readDemoDocs();
+        const idx = docs.findIndex(d => d.id === doc.id);
+        const cloudDoc: CloudDocument = {
+          id: doc.id, ownerId: doc.ownerId, title: doc.title,
+          content: doc.content, createdAt: doc.createdAt, updatedAt: doc.updatedAt,
+          isPublic: doc.isPublic, sharedWith: doc.sharedWith
+        };
+        if (idx >= 0) {
+          docs[idx] = cloudDoc;
+        } else {
+          docs.push(cloudDoc);
+        }
+        CloudDBService.writeDemoDocs(docs);
+        return { success: true, message: isNew ? '已上传到云端' : '已同步到云端', data: doc };
+      } catch (e) {
+        return { success: false, message: '保存失败: ' + CloudDBService.getErrorMessage(e) };
+      }
+    }
+
+    if (!CloudDBService.zone) {
       return { success: false, message: '云端服务未就绪，请检查 Cloud DB 配置' };
     }
     const user = await AuthService.getCurrentUser();
@@ -98,8 +166,23 @@ export class CloudDBService {
   }
 
   static async getMyDocuments(): Promise<UserDocument[]> {
-    const ok = await CloudDBService.ensureInit();
-    if (!ok || !CloudDBService.zone) return [];
+    await CloudDBService.ensureInit();
+
+    if (CloudDBService.isDemoMode) {
+      const user = await AuthService.getCurrentUser();
+      if (!user) return [];
+      try {
+        const docs = CloudDBService.readDemoDocs();
+        return docs
+          .filter(d => d.ownerId === user.uid)
+          .sort((a, b) => b.updatedAt - a.updatedAt)
+          .map(d => UserDocument.fromMap(d as unknown as Record<string, Object>));
+      } catch (e) {
+        return [];
+      }
+    }
+
+    if (!CloudDBService.zone) return [];
 
     const user = await AuthService.getCurrentUser();
     if (!user) return [];
@@ -117,8 +200,27 @@ export class CloudDBService {
   }
 
   static async getSharedWithMe(): Promise<UserDocument[]> {
-    const ok = await CloudDBService.ensureInit();
-    if (!ok || !CloudDBService.zone) return [];
+    await CloudDBService.ensureInit();
+
+    if (CloudDBService.isDemoMode) {
+      const user = await AuthService.getCurrentUser();
+      if (!user) return [];
+      try {
+        const docs = CloudDBService.readDemoDocs();
+        return docs
+          .filter(d => d.ownerId !== user.uid)
+          .filter(d => {
+            const doc = UserDocument.fromMap(d as unknown as Record<string, Object>);
+            return doc.isSharedWithUser(user.uid);
+          })
+          .sort((a, b) => b.updatedAt - a.updatedAt)
+          .map(d => UserDocument.fromMap(d as unknown as Record<string, Object>));
+      } catch (e) {
+        return [];
+      }
+    }
+
+    if (!CloudDBService.zone) return [];
 
     const user = await AuthService.getCurrentUser();
     if (!user) return [];
@@ -137,8 +239,19 @@ export class CloudDBService {
   }
 
   static async getDocumentById(id: string): Promise<UserDocument | null> {
-    const ok = await CloudDBService.ensureInit();
-    if (!ok || !CloudDBService.zone) return null;
+    await CloudDBService.ensureInit();
+
+    if (CloudDBService.isDemoMode) {
+      try {
+        const docs = CloudDBService.readDemoDocs();
+        const found = docs.find(d => d.id === id);
+        return found ? UserDocument.fromMap(found as unknown as Record<string, Object>) : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    if (!CloudDBService.zone) return null;
 
     try {
       const query: object = (CloudDBService.zone as Record<string, Function>)['createQuery']() as object;
@@ -153,8 +266,24 @@ export class CloudDBService {
   }
 
   static async deleteDocument(doc: UserDocument): Promise<ServiceResult> {
-    const ok = await CloudDBService.ensureInit();
-    if (!ok || !CloudDBService.zone) {
+    await CloudDBService.ensureInit();
+
+    if (CloudDBService.isDemoMode) {
+      const user = await AuthService.getCurrentUser();
+      if (!user || user.uid !== doc.ownerId) {
+        return { success: false, message: '只能删除自己创建的文档' };
+      }
+      try {
+        const docs = CloudDBService.readDemoDocs();
+        const filtered = docs.filter(d => d.id !== doc.id);
+        CloudDBService.writeDemoDocs(filtered);
+        return { success: true, message: '已从云端删除' };
+      } catch (e) {
+        return { success: false, message: '删除失败: ' + CloudDBService.getErrorMessage(e) };
+      }
+    }
+
+    if (!CloudDBService.zone) {
       return { success: false, message: '云端服务未就绪' };
     }
 
@@ -188,6 +317,7 @@ export class CloudDBService {
   }
 
   static isAvailable(): boolean {
+    if (CloudDBService.isDemoMode) return true;
     try {
       const module: object = globalThis.requireNativeModule('agconnect.clouddb') as object;
       return module !== undefined;

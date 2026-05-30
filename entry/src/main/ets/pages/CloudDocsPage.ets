@@ -38,6 +38,7 @@ struct CloudDocsPage {
 
   async loadDocuments(): Promise<void> {
     this.isLoading = true;
+    await CloudDBService.init();
     const user = await AuthService.getCurrentUser();
     if (!user) {
       promptAction.showToast({ message: '请先登录', duration: 2000 });
@@ -398,7 +399,7 @@ struct CloudDocsPage {
           .backgroundColor(this.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)')
           .backdropBlur(50)
           .shadow(ShadowStyle.OUTER_DEFAULT_XS)
-          .onClick(() => router.back())
+          .onClick(() => router.back({ url: '' }))
         }
       }
       .width('92%')
