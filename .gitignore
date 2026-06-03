@@ -15,3 +15,10 @@ oh-package-lock.json5
 /Markdown/build
 /Markdown/oh-package-lock.json5
 Markdown/BuildProfile.ets
+
+# 演讲稿相关
+ppt_latex/
+告诉AI如何做PPT的大纲.md
+演讲稿.pdf
+演讲稿.tex
+演讲稿_逐页脚本.md

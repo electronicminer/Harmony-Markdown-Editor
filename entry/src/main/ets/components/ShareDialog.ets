@@ -1,6 +1,7 @@
 import { promptAction } from '@kit.ArkUI';
 import { UserDocument } from '../models/UserDocument';
 import { CloudDBService } from '../utils/CloudDBService';
+import { pasteboard } from '@kit.BasicServicesKit';
 
 @CustomDialog
 export struct ShareDialog {
@@ -74,11 +75,21 @@ export struct ShareDialog {
             .type(ButtonType.Capsule)
             .height(36)
             .onClick(() => {
-              const pasteboard: object = globalThis.requireModule('system.pasteboard') as object;
-              if (pasteboard) {
-                (pasteboard as Record<string, Function>)['setData']({ data: this.doc.id, type: 'text/plain' });
+              if (this.doc && this.doc.id) {
+                try {
+                  let pasteData = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, this.doc.id);
+                  let systemPasteboard = pasteboard.getSystemPasteboard();
+                  systemPasteboard.setData(pasteData).then(() => {
+                    promptAction.showToast({ message: '已复制文档ID', duration: 1500 });
+                  }).catch((err: Error) => {
+                    promptAction.showToast({ message: '复制失败: ' + err.message, duration: 1500 });
+                  });
+                } catch (e) {
+                  promptAction.showToast({ message: '复制异常: ' + e.message, duration: 1500 });
+                }
+              } else {
+                promptAction.showToast({ message: '文档ID为空', duration: 1500 });
               }
-              promptAction.showToast({ message: '已复制文档ID', duration: 1500 });
             })
         }
         .width('100%')
