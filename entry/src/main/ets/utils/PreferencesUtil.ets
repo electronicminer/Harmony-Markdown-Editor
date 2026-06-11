@@ -18,6 +18,9 @@ export class PreferencesUtil {
   private static readonly KEY_AI_SYSTEM_PROMPT = 'aiSystemPrompt';
   private static readonly KEY_AI_ENABLED = 'aiEnabled';
 
+  // Cloud Doc Map Key（本地文件URI → 云端文档ID 映射）
+  private static readonly KEY_CLOUD_DOC_MAP = 'cloudDocMap';
+
   // Profile Keys
   private static readonly KEY_PROFILE_NICKNAME = 'profileNickname';
   private static readonly KEY_PROFILE_BIO = 'profileBio';
@@ -103,7 +106,41 @@ export class PreferencesUtil {
     const prefs = await PreferencesUtil.getPreferences(context);
     return await prefs.get(PreferencesUtil.KEY_FOLLOW_SYSTEM, false) as boolean;
   }
-  
+
+  // Cloud Doc Map Methods — 本地文件 URI → 云端文档 ID
+  static async saveCloudDocId(context: common.UIAbilityContext, fileUri: string, cloudDocId: string) {
+    if (!fileUri || !cloudDocId) return;
+    const prefs = await PreferencesUtil.getPreferences(context);
+    const raw = await prefs.get(PreferencesUtil.KEY_CLOUD_DOC_MAP, '{}') as string;
+    const map: Record<string, string> = JSON.parse(raw) as Record<string, string>;
+    map[fileUri] = cloudDocId;
+    await prefs.put(PreferencesUtil.KEY_CLOUD_DOC_MAP, JSON.stringify(map));
+    await prefs.flush();
+  }
+
+  static async getCloudDocId(context: common.UIAbilityContext, fileUri: string): Promise<string> {
+    if (!fileUri) return '';
+    const prefs = await PreferencesUtil.getPreferences(context);
+    const raw = await prefs.get(PreferencesUtil.KEY_CLOUD_DOC_MAP, '{}') as string;
+    const map: Record<string, string> = JSON.parse(raw) as Record<string, string>;
+    return map[fileUri] || '';
+  }
+
+  static async removeCloudDocId(context: common.UIAbilityContext, fileUri: string) {
+    if (!fileUri) return;
+    const prefs = await PreferencesUtil.getPreferences(context);
+    const raw = await prefs.get(PreferencesUtil.KEY_CLOUD_DOC_MAP, '{}') as string;
+    const map: Record<string, string> = JSON.parse(raw) as Record<string, string>;
+    const newMap: Record<string, string> = {};
+    for (const key of Object.keys(map)) {
+      if (key !== fileUri) {
+        newMap[key] = map[key];
+      }
+    }
+    await prefs.put(PreferencesUtil.KEY_CLOUD_DOC_MAP, JSON.stringify(newMap));
+    await prefs.flush();
+  }
+
   // AI Config Methods
   static async saveAIConfigApiUrl(context: common.UIAbilityContext, url: string) {
     const prefs = await PreferencesUtil.getPreferences(context);

@@ -133,9 +133,9 @@ export struct ShareDialog {
 
         if (this.doc.sharedWith) {
           Flex({ wrap: FlexWrap.Wrap }) {
-            ForEach(this.doc.sharedWith.split(',').filter(s => s.trim()), (uid: string) => {
+            ForEach(this.doc.sharedWith.split(',').filter(s => s.trim()), (email: string) => {
               Row({ space: 4 }) {
-                Text(uid.trim())
+                Text(email.trim())
                   .fontSize(11)
                   .fontColor('#0A59F7')
                   .maxLines(1)
@@ -145,7 +145,7 @@ export struct ShareDialog {
                   .fontSize(11)
                   .fontColor(this.isDark ? '#99FFFFFF' : '#99000000')
                   .onClick(() => {
-                    this.doc.removeSharedUser(uid.trim());
+                    this.doc.removeSharedUser(email.trim());
                   })
               }
               .padding({ left: 8, right: 8, top: 4, bottom: 4 })

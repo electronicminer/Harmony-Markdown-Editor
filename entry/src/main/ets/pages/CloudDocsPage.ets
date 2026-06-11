@@ -15,6 +15,7 @@ struct CloudDocsPage {
   @State importDocId: string = '';
   @State showImportDialog: boolean = false;
   @State isDark: boolean = false;
+  @State isCloudConnected: boolean = false;
   @State selectedDoc: UserDocument = new UserDocument();
 
   private shareDialogController: CustomDialogController = new CustomDialogController({
@@ -39,6 +40,7 @@ struct CloudDocsPage {
   async loadDocuments(): Promise<void> {
     this.isLoading = true;
     await CloudDBService.init();
+    this.isCloudConnected = !CloudDBService.isDemoMode;
     const user = await AuthService.getCurrentUser();
     if (!user) {
       promptAction.showToast({ message: '请先登录', duration: 2000 });
@@ -79,7 +81,7 @@ struct CloudDocsPage {
       return;
     }
 
-    if (!doc.isSharedWithUser(user.uid) && doc.ownerId !== user.uid) {
+    if (!doc.isSharedWithUser(user.email) && doc.ownerId !== user.uid) {
       promptAction.showToast({ message: '该文档未分享给你', duration: 2000 });
       return;
     }
@@ -207,14 +209,14 @@ struct CloudDocsPage {
   }
 
   @Builder
-  TabButton(label: string, isActive: boolean, onClick: () => void) {
+  TabButton(label: string, tabIndex: number, onClick: () => void) {
     Text(label)
       .fontSize(14)
-      .fontWeight(isActive ? FontWeight.Bold : FontWeight.Normal)
-      .fontColor(isActive ? '#0A59F7' : (this.isDark ? '#99FFFFFF' : '#99000000'))
+      .fontWeight(this.activeTab === tabIndex ? FontWeight.Bold : FontWeight.Normal)
+      .fontColor(this.activeTab === tabIndex ? '#0A59F7' : (this.isDark ? '#99FFFFFF' : '#99000000'))
       .padding({ left: 16, right: 16, top: 8, bottom: 8 })
       .borderRadius(20)
-      .backgroundColor(isActive ? 'rgba(10,89,247,0.1)' : 'transparent')
+      .backgroundColor(this.activeTab === tabIndex ? 'rgba(10,89,247,0.1)' : 'transparent')
       .onClick(onClick)
   }
 
@@ -224,8 +226,8 @@ struct CloudDocsPage {
         Row().height(100).width('100%')
 
         Row({ space: 12 }) {
-          this.TabButton('我的文档', this.activeTab === 0, () => { this.activeTab = 0; })
-          this.TabButton('分享给我', this.activeTab === 1, () => { this.activeTab = 1; })
+          this.TabButton('我的文档', 0, () => { this.activeTab = 0; })
+          this.TabButton('分享给我', 1, () => { this.activeTab = 1; })
           Blank()
           Button('导入')
             .fontSize(12)
@@ -368,12 +370,29 @@ struct CloudDocsPage {
 
       // 导航栏
       Row() {
-        Text('云文档')
-          .fontSize(20)
-          .fontWeight(FontWeight.Bold)
-          .fontFamily('HarmonyOS Sans')
-          .fontColor(this.isDark ? '#E5FFFFFF' : '#E5000000')
-          .layoutWeight(1)
+        Row({ space: 8 }) {
+          Text('云文档')
+            .fontSize(20)
+            .fontWeight(FontWeight.Bold)
+            .fontFamily('HarmonyOS Sans')
+            .fontColor(this.isDark ? '#E5FFFFFF' : '#E5000000')
+
+          Row() {
+            Row()
+              .width(8)
+              .height(8)
+              .borderRadius(4)
+              .backgroundColor(this.isCloudConnected ? '#00A854' : '#FAAD14')
+
+            Text(this.isCloudConnected ? '云端' : '本地')
+              .fontSize(11)
+              .fontColor(this.isCloudConnected ? '#00A854' : '#FAAD14')
+          }
+          .padding({ left: 6, right: 8, top: 3, bottom: 3 })
+          .borderRadius(8)
+          .backgroundColor(this.isCloudConnected ? 'rgba(0,168,84,0.1)' : 'rgba(250,173,20,0.1)')
+        }
+        .layoutWeight(1)
 
         Row({ space: 12 }) {
           Button({ type: ButtonType.Circle, stateEffect: true }) {
@@ -386,7 +405,10 @@ struct CloudDocsPage {
           .backgroundColor(this.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)')
           .backdropBlur(50)
           .shadow(ShadowStyle.OUTER_DEFAULT_XS)
-          .onClick(() => this.loadDocuments())
+          .onClick(() => {
+            CloudDBService.forceCloudMode();
+            this.loadDocuments();
+          })
 
           Button({ type: ButtonType.Circle, stateEffect: true }) {
             Text('←')

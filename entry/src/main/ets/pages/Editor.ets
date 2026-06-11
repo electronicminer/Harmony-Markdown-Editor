@@ -12,6 +12,7 @@ import { AIConfig, AIConfigClass } from '../utils/AIConfig';
 import { AIChatPanel } from '../components/AIChatPanel';
 import { AgentPlan } from '../utils/AIService';
 import { CloudDBService } from '../utils/CloudDBService';
+import { AuthService } from '../utils/AuthService';
 import { UserDocument } from '../models/UserDocument';
 import { ShareDialog } from '../components/ShareDialog';
 // 自动补全功能导入（已注释）
@@ -93,6 +94,11 @@ struct Editor {
       }
       if (params['uri']) {
         this.fileUri = params['uri'] as string;
+        // 检查该文件之前是否已上传到云端，恢复 cloudDocId
+        const context = getContext(this) as common.UIAbilityContext;
+        PreferencesUtil.getCloudDocId(context, this.fileUri).then(id => {
+          if (id) this.cloudDocId = id;
+        });
       }
       if (params['isDark'] !== undefined) {
         this.isDark = params['isDark'] as boolean;
@@ -377,13 +383,25 @@ struct Editor {
   }
 
   async cloudSave(): Promise<void> {
-    const user = await (await import('../utils/AuthService')).AuthService.getCurrentUser();
+    if (this.isCloudSyncing) return;
+
+    const user = await AuthService.getCurrentUser();
     if (!user) {
       promptAction.showToast({ message: '请先登录后再上传到云端', duration: 2000 });
       return;
     }
 
     this.isCloudSyncing = true;
+
+    // 如果有本地文件但 cloudDocId 还是空的，立即从持久化映射中恢复
+    if (!this.cloudDocId && this.fileUri) {
+      const context = getContext(this) as common.UIAbilityContext;
+      const existingId = await PreferencesUtil.getCloudDocId(context, this.fileUri);
+      if (existingId) {
+        this.cloudDocId = existingId;
+      }
+    }
+
     const doc = new UserDocument();
     doc.id = this.cloudDocId;
     doc.content = this.markdownText;
@@ -394,7 +412,14 @@ struct Editor {
 
     if (result.success && result.data) {
       const savedDoc = result.data as UserDocument;
-      this.cloudDocId = savedDoc.id;
+      if (!this.cloudDocId || this.cloudDocId !== savedDoc.id) {
+        this.cloudDocId = savedDoc.id;
+      }
+      // 持久化映射
+      if (this.fileUri) {
+        const context = getContext(this) as common.UIAbilityContext;
+        PreferencesUtil.saveCloudDocId(context, this.fileUri, savedDoc.id);
+      }
       promptAction.showToast({ message: result.message, duration: 1500 });
     } else {
       promptAction.showToast({ message: result.message, duration: 2000 });
@@ -815,7 +840,7 @@ struct Editor {
               this.saveFile()
             })
             this.GlassIconButton(this.isCloudSyncing ? '⏳' : '☁️', () => {
-              this.cloudSave()
+              if (!this.isCloudSyncing) this.cloudSave()
             })
             this.GlassIconButton('🔗', () => {
               this.openShareDialog()

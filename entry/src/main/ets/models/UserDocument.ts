@@ -1,4 +1,6 @@
-export class UserDocument {
+import { cloudDatabase } from '@kit.CloudFoundationKit';
+
+export class UserDocument extends cloudDatabase.DatabaseObject {
   id: string = '';
   ownerId: string = '';
   title: string = '';
@@ -8,6 +10,10 @@ export class UserDocument {
   isPublic: boolean = false;
   sharedWith: string = '';
 
+  naturalbase_ClassName(): string {
+    return 'UserDocument';
+  }
+
   static fromMap(map: Record<string, Object>): UserDocument {
     const doc = new UserDocument();
     doc.id = String(map['id'] || '');
@@ -16,16 +22,18 @@ export class UserDocument {
     doc.content = String(map['content'] || '');
     doc.createdAt = Number(map['createdAt'] || 0);
     doc.updatedAt = Number(map['updatedAt'] || 0);
-    doc.isPublic = Boolean(map['isPublic'] || false);
+    if (typeof map['isPublic'] === 'boolean') {
+      doc.isPublic = map['isPublic'] as boolean;
+    } else {
+      doc.isPublic = String(map['isPublic']) === 'true' || map['isPublic'] === 1;
+    }
     doc.sharedWith = String(map['sharedWith'] || '');
     return doc;
   }
 
   static generateId(): string {
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    let result = '';
-    const timestamp = Date.now().toString(36);
-    result += timestamp;
+    let result = Date.now().toString(36);
     for (let i = 0; i < 8; i++) {
       result += chars.charAt(Math.floor(Math.random() * chars.length));
     }
@@ -48,24 +56,26 @@ export class UserDocument {
     return `${month}-${day} ${hours}:${minutes}`;
   }
 
-  isSharedWithUser(uid: string): boolean {
+  isSharedWithUser(userEmail: string): boolean {
     if (this.isPublic) return true;
     if (!this.sharedWith) return false;
-    const uids = this.sharedWith.split(',').map(s => s.trim());
-    return uids.includes(uid);
+    const emails = this.sharedWith.split(',').map(s => s.trim().toLowerCase());
+    return emails.includes(userEmail.toLowerCase());
   }
 
-  addSharedUser(uid: string): void {
-    const uids = this.sharedWith ? this.sharedWith.split(',').map(s => s.trim()) : [];
-    if (!uids.includes(uid)) {
-      uids.push(uid);
-      this.sharedWith = uids.join(',');
+  addSharedUser(email: string): void {
+    const normalized = email.trim().toLowerCase();
+    const emails = this.sharedWith ? this.sharedWith.split(',').map(s => s.trim().toLowerCase()) : [];
+    if (!emails.includes(normalized)) {
+      emails.push(normalized);
+      this.sharedWith = emails.join(',');
     }
   }
 
-  removeSharedUser(uid: string): void {
-    const uids = this.sharedWith ? this.sharedWith.split(',').map(s => s.trim()) : [];
-    const filtered = uids.filter(u => u !== uid);
+  removeSharedUser(email: string): void {
+    const normalized = email.trim().toLowerCase();
+    const emails = this.sharedWith ? this.sharedWith.split(',').map(s => s.trim().toLowerCase()) : [];
+    const filtered = emails.filter(u => u !== normalized);
     this.sharedWith = filtered.join(',');
   }
 }
