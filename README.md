@@ -1,157 +1,268 @@
 # Harmony Markdown Editor
 
-一款深度集成 AI 能力、专为 HarmonyOS 设计与开发的下一代 Markdown 编辑器。它继承了鸿蒙的"原子化服务"、"统一生态"与"自然交互"理念，在界面和动效上做到原汁原味，同时将 AI 深度融入写作工作流，重新定义智能书写体验。
+<div align="center">
+
+[![HarmonyOS](https://img.shields.io/badge/HarmonyOS-NEXT-76CE65?style=flat-square&logo=harmonyos)](https://developer.harmonyos.com/)
+[![API Version](https://img.shields.io/badge/API-15%20(5.0.3)-blue?style=flat-square)](https://developer.harmonyos.com/)
+[![Language](https://img.shields.io/badge/Language-ArkTS-purple?style=flat-square)](https://developer.harmonyos.com/cn/docs/documentation/doc-guides/arkts-overview-0000001828699769)
+[![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
+
+**基于 HarmonyOS NEXT 的原生 Markdown 编辑器** — ArkUI 原生渲染，集成 AI 写作助手与华为云同步
+
+</div>
 
 ---
 
 ## 目录
 
-- [项目特性](#项目特性)
-- [截图展示](#截图展示)
-- [项目架构](#项目架构)
+- [截图](#截图)
+- [项目概览](#项目概览)
+- [核心功能](#核心功能)
+  - [Markdown 渲染引擎](#markdown-渲染引擎)
+  - [编辑器](#编辑器)
+  - [AI 写作助手](#ai-写作助手)
+  - [云端同步与分享](#云端同步与分享)
+  - [用户系统](#用户系统)
+  - [界面主题](#界面主题)
+- [项目结构](#项目结构)
 - [环境要求](#环境要求)
 - [快速开始](#快速开始)
-- [使用方法](#使用方法)
-- [部署平台](#部署平台)
+- [使用指南](#使用指南)
+- [配置 AGConnect](#配置-agconnect)
+- [技术栈](#技术栈)
+- [Star 历史](#star-历史)
+- [贡献者](#贡献者)
 - [许可证](#许可证)
 
 ---
 
-## 项目特性
+## 项目概览
 
-### Markdown 渲染引擎
+Harmony Markdown Editor 是一款运行在 HarmonyOS NEXT 上的纯原生 Markdown 编辑与阅读应用。与市面上基于 WebView 的方案不同，本项目的 Markdown 渲染引擎直接调用 ArkUI 组件绘制，实现真正的原生渲染体验。
 
-- 基于 `marked` 解析器实现的原生 ArkUI 组件级渲染，非 WebView 方案，性能更优
-- 完整支持 GFM (GitHub Flavored Markdown) 语法规范
-- 支持以下 Markdown 元素的原生渲染：
-  - 标题 (H1 - H6)
-  - 粗体、斜体、删除线、行内代码
-  - 代码块（含语法高亮）
-  - 有序列表与无序列表（支持多级嵌套）
-  - 引用块 (Blockquote)
-  - 表格 (Table)
-  - 分隔线
-  - 图片与超链接
-  - LaTeX 数学公式
-  - HTML 标签（部分支持）
-- 支持自定义主题配色与深色模式主题
-- 支持自定义 Block / Inline 渲染器扩展
+项目由两部分组成：
 
-### 编辑器功能
+| 模块 | 路径 | 说明 |
+|------|------|------|
+| **Markdown** | `Markdown/` | 独立可发布的 Markdown 渲染库（已发布至 ohpm） |
+| **Entry** | `entry/` | 完整的编辑器应用，集成渲染库、AI 助手、云端同步等 |
 
-- 实时分屏预览：编辑与预览同步展示，所见即所得
-- 三种视图切换：分屏对比、仅编辑、仅预览
-- 悬浮工具栏：一键插入标题、加粗、斜体、代码块、链接、图片、列表等格式
-- 撤销 / 重做：支持最多 100 步历史记录
-- 自动保存：可配置保存间隔，后台定时保存
-- 文件管理：打开本地 `.md` 文件、另存为指定路径
-- PDF 导出：通过内置 Web 组件实现打印导出
-- 字数与字符数实时统计
-- 拖拽分隔线：自由调整编辑区与预览区的宽度比例
 
-### AI 智能写作助手
-
-- 内置 AI 聊天面板，支持接入任何 OpenAI 兼容格式的 API
-- Plan-Act 工作模式：AI 提出修改方案，用户确认后自动执行
-- 支持的 AI 操作类型：
-  - `replace_content` -- 替换指定文本内容
-  - `append_content` -- 在文档末尾追加内容
-  - `insert_content` -- 在光标位置插入内容
-  - `delete_content` -- 删除指定文本内容
-- 快捷操作按钮：语法帮助、优化写作、表格模板、代码块模板
-- 可在设置中配置 API URL、API Key、模型名称与系统提示词
-- 连接测试功能：保存前可验证 API 连通性
-
-### 界面与交互
-
-- 符合 HarmonyOS 设计规范的原生 UI 体验
-- 玻璃态 (Glassmorphism) 悬浮导航栏，支持背景模糊与阴影效果
-- 深色模式 / 浅色模式切换，支持跟随系统主题
-- 流畅的动画过渡效果
-- 安全区域适配（状态栏、导航栏）
-- HarmonyOS Sans 字体
-
----
-
-## 截图展示
+## 截图
 
 ### 浅色模式
 
-![浅色模式](screen/1%20(1).png)
+![浅色模式首页](screen/1%20(1).png)
 
-![深色模式](screen/1%20(3).png)
-
-![深色模式](screen/1%20(5).png)
 ### 深色模式
 
 ![深色模式](screen/1%20(2).png)
-
+![深色模式](screen/1%20(3).png)
 ![深色模式](screen/1%20(4).png)
+![深色模式](screen/1%20(5).png)
 
 
+## 核心功能
 
----
+### Markdown 渲染引擎
 
-## 项目架构
+基于 `marked` 解析器的 ArkTS 移植版本，支持完整的 GFM（GitHub Flavored Markdown）规范。通过 **TaskPool 多线程**在子线程完成词法分析和解析，主线程仅负责 UI 渲染，确保大文档渲染不卡顿。
+
+**支持的元素：**
+
+| 元素 | 语法 | 状态 |
+|------|------|------|
+| 标题 | `# ~ ######` | ✅ |
+| 段落 | 普通文本 | ✅ |
+| 粗体 | `**text**` | ✅ |
+| 斜体 | `*text*` | ✅ |
+| 删除线 | `~~text~~` | ✅ |
+| 行内代码 | `` `code` `` | ✅ |
+| 代码块 | ```` ``` ```` (带语法高亮) | ✅ |
+| 有序列表 | `1. item` (支持嵌套) | ✅ |
+| 无序列表 | `- item` (支持嵌套) | ✅ |
+| 引用块 | `> quote` | ✅ |
+| 表格 | `\| col \| col \|` | ✅ |
+| 分隔线 | `---` | ✅ |
+| 图片 | `![alt](url)` (可点击) | ✅ |
+| 超链接 | `[text](url)` (可点击) | ✅ |
+| LaTeX 公式 | `$...$` / `$$...$$` (本地渲染) | ✅ |
+| HTML 标签 | 部分支持 | ⏳ |
+| 任务列表 | `- [ ] task` | ⏳ |
+
+**可扩展性：**
+
+- 支持注册自定义 Block 和 Inline 渲染器
+- 支持注册 `marked` 插件扩展语法
+- 主题系统支持自定义颜色和字体样式
+
+### 编辑器
+
+- **分屏预览**：编辑区与预览区同步显示，左侧编辑右侧实时预览
+- **三种视图模式**：分屏对比 ↔ 仅编辑 ↔ 仅预览，点击工具栏循环切换
+- **悬浮工具栏**：毛玻璃效果悬浮在编辑器顶部，包含 H1/H2、加粗、斜体、代码块、链接、图片、有序/无序列表等快捷插入按钮
+- **撤销 / 重做**：最多保留 100 步历史操作
+- **自动保存**：可配置开关与保存间隔（秒级），后台定时写入文件
+- **文件操作**：
+  - 从系统文件选择器打开 `.md` 文件
+  - 保存 / 另存为到指定路径
+  - 启动时自动恢复上次打开的文件（可选）
+- **PDF 导出**：通过 Web 组件渲染后触发打印
+- **字数统计**：实时显示单词数和字符数
+- **拖拽分栏**：编辑区与预览区之间的分隔线支持拖拽调整比例
+- **AI 面板集成**：启用后编辑器右侧展开 AI 聊天面板，形成三栏布局
+
+### AI 写作助手
+
+支持 OpenAI 兼容格式的 API 服务，接入后可实现以下功能：
+
+- **对话式交互**：在 AI 面板中直接提问，AI 返回回答或文档修改建议
+- **操作确认机制**：AI 提出修改方案后，需用户点击"允许执行"才会实际修改文档，避免误操作
+- **支持的文档操作**：
+  - `replace_content` — 替换指定文本
+  - `append_content` — 文档末尾追加内容
+  - `insert_content` — 光标位置插入内容
+  - `delete_content` — 删除指定文本
+- **快捷操作按钮**：语法帮助、优化写作、表格模板、代码块模板
+- **可配置项**：API URL、API Key、模型名称、系统提示词
+
+> **注意**：使用前需在设置中自行配置兼容 OpenAI 格式的 API 地址与密钥。
+
+### 云端同步与分享
+
+用户认证和云存储基于华为 **AGConnect**（AppGallery Connect）服务：
+
+- **云端文档库**：文档存储在华为 Cloud DB 上，同一账号跨设备同步
+- **文档分享**：
+  - 每个文档拥有唯一 ID，可将 ID 分享给他人
+  - 支持**公开分享**（任何人凭 ID 可查看）
+  - 支持按**邮箱添加协作者**，协作者可在"分享给我"列表查看
+- **连接容灾**：Cloud DB 不可用时自动降级为本地 JSON 文件存储，数据不丢失
+- **上传映射**：自动维护本地文件 URI 与云端文档 ID 的映射关系
+
+### 用户系统
+
+- **注册 / 登录**：邮箱验证码注册与登录（华为 AGConnect Auth）
+- **密码管理**：密码强度检测（大小写字母、数字、特殊字符至少 3 种），支持密码重置
+- **个人资料**：自定义昵称、个性签名、头像颜色（12 种颜色可选）
+- **Token 管理**：自动维护登录态，支持退出登录
+
+### 界面主题
+
+- **深色 / 浅色模式**：支持手动切换
+- **跟随系统**：可设置为跟随 HarmonyOS 系统深色模式自动切换
+- **毛玻璃设计**：导航栏和工具栏采用 `backdropBlur` 毛玻璃效果
+- **安全区域适配**：状态栏和导航栏做了 `expandSafeArea` 适配
+- **字体**：全局使用 HarmonyOS Sans 系统字体
+
+
+## 结构总览
 
 ```
 Harmony-Markdown-Editor/
-├── AppScope/                    # 应用全局配置
-├── entry/                       # 主模块 (Entry)
-│   └── src/main/ets/
-│       ├── pages/
-│       │   ├── Index.ets        # 首页：Markdown 预览 + 导航
-│       │   └── Editor.ets       # 编辑器：分屏编辑 + AI 面板
-│       ├── components/
-│       │   └── AIChatPanel.ets  # AI 聊天面板组件
-│       ├── utils/
-│       │   ├── AIService.ets    # AI 服务：API 调用与响应解析
-│       │   ├── AIConfig.ets     # AI 配置管理
-│       │   └── PreferencesUtil.ets  # 偏好设置持久化工具
-│       └── entryability/
-│           └── EntryAbility.ets # 应用入口 Ability
-├── Markdown/                    # Markdown 渲染库模块
-│   └── src/main/ets/
-│       ├── Markdown.ets         # 主组件：解析与渲染入口
-│       ├── Index.ets            # 模块导出与类型定义
-│       ├── component/           # 渲染组件集合
-│       │   ├── MarkdownComponent.ets  # 组件调度器
-│       │   ├── Heading.ets      # 标题渲染
-│       │   ├── Paragraph.ets    # 段落渲染
-│       │   ├── Code.ets         # 代码块渲染
-│       │   ├── Table.ets        # 表格渲染
-│       │   ├── MList.ets        # 列表渲染
-│       │   ├── BlockQuote.ets   # 引用块渲染
-│       │   ├── Inline.ets       # 行内元素渲染
-│       │   ├── Hr.ets           # 分隔线渲染
-│       │   ├── Html.ets         # HTML 标签渲染
-│       │   └── Latex.ets        # LaTeX 公式渲染
-│       ├── config/              # 主题配置
-│       │   ├── DefaultTheme.ets # 默认主题定义
-│       │   └── MarkdownTheme.ets# 主题接口
-│       ├── core/                # 解析核心
-│       │   ├── parseInlineToken.ets  # 行内 Token 解析
-│       │   ├── analyzer/
-│       │   │   └── HighlightAnalyzer.ets  # 语法高亮分析器
-│       │   └── plugins/
-│       │       └── latex.ets    # LaTeX 插件
-│       └── extensions.ets       # 扩展注册
-└── screen/                      # 截图资源
+├── AppScope/                              # 应用级配置（bundleName、图标、标签）
+│   └── app.json5
+│
+├── entry/                                 # 主应用模块（可执行 HAP）
+│   ├── src/main/
+│   │   ├── ets/
+│   │   │   ├── entryability/
+│   │   │   │   └── EntryAbility.ets       # Ability 生命周期，AGConnect 初始化
+│   │   │   ├── entrybackupability/
+│   │   │   │   └── EntryBackupAbility.ets # 备份恢复扩展
+│   │   │   ├── pages/
+│   │   │   │   ├── Index.ets             # 首页：Markdown 预览 + 文件导航
+│   │   │   │   ├── Editor.ets            # 编辑器：分屏编辑预览 + AI 面板
+│   │   │   │   ├── CloudDocsPage.ets     # 云文档列表：我的文档 / 分享给我的
+│   │   │   │   ├── RegisterPage.ets      # 登录 & 注册 & 用户资料
+│   │   │   │   ├── ProfilePage.ets       # 个人资料编辑
+│   │   │   │   └── PasswordResetPage.ets # 密码重置
+│   │   │   ├── components/
+│   │   │   │   ├── AIChatPanel.ets       # AI 对话面板
+│   │   │   │   ├── ShareDialog.ets       # 文档分享对话框
+│   │   │   │   └── CompletionPanel.ets   # 自动补全面板（预留）
+│   │   │   ├── models/
+│   │   │   │   └── UserDocument.ts       # Cloud DB 文档数据模型
+│   │   │   └── utils/
+│   │   │       ├── AuthService.ts        # 华为 AGConnect Auth 封装
+│   │   │       ├── CloudDBService.ts     # 华为 Cloud DB 封装（含本地降级）
+│   │   │       ├── AIService.ets         # AI API 调用（OpenAI 兼容格式）
+│   │   │       ├── AIConfig.ets          # AI 配置状态管理
+│   │   │       ├── PreferencesUtil.ets   # 偏好设置持久化
+│   │   │       └── MarkdownCompletions.ts # Markdown 语法自动补全（预留）
+│   │   └── resources/                    # 资源文件（string、color、media、rawfile）
+│   └── oh-package.json5
+│
+├── Markdown/                              # Markdown 渲染库（独立 ohpm 包）
+│   ├── src/main/ets/
+│   │   ├── Markdown.ets                  # 渲染库主组件（@ComponentV2）
+│   │   ├── MarkdownLite.ets              # 轻量版本（v2 旧版，已废弃）
+│   │   ├── Index.ets                     # 导出入口
+│   │   ├── component/                    # 各元素原生渲染组件
+│   │   │   ├── MarkdownComponent.ets     # 根组件，遍历 Token 分发渲染
+│   │   │   ├── Heading.ets              # 标题
+│   │   │   ├── Paragraph.ets            # 段落
+│   │   │   ├── Code.ets                 # 代码块
+│   │   │   ├── Table.ets                # 表格
+│   │   │   ├── MList.ets                # 列表（有序/无序）
+│   │   │   ├── BlockQuote.ets           # 引用块
+│   │   │   ├── Inline.ets               # 行内样式（粗体/斜体/代码/链接/图片）
+│   │   │   ├── Hr.ets                   # 分割线
+│   │   │   ├── Html.ets                 # HTML 标签
+│   │   │   └── Latex.ets                # LaTeX 数学公式
+│   │   ├── config/                       # 主题配置
+│   │   │   ├── DefaultTheme.ets          # 默认亮/暗主题（参考 JetBrains UI 配色）
+│   │   │   └── MarkdownTheme.ets         # 主题类型定义
+│   │   ├── core/                         # marked 解析器 ArkTS 移植
+│   │   │   ├── marked.ts                # 主入口，导出 Marked 实例
+│   │   │   ├── Lexer.ts                 # 词法分析器
+│   │   │   ├── Parser.ts                # 解析器
+│   │   │   ├── Tokenizer.ts             # 分词器
+│   │   │   ├── Renderer.ts              # HTML 渲染器
+│   │   │   ├── TextRenderer.ts          # 纯文本渲染器
+│   │   │   ├── Hooks.ts                 # 生命周期钩子
+│   │   │   ├── Instance.ts              # Marked 核心实例
+│   │   │   ├── Tokens.ts                # Token 类型定义
+│   │   │   ├── rules.ts                 # 正则规则
+│   │   │   ├── helpers.ts               # 辅助函数
+│   │   │   ├── defaults.ts              # 默认配置
+│   │   │   ├── MarkedOptions.ts          # 配置选项类型
+│   │   │   ├── analyzer/
+│   │   │   │   └── HighlightAnalyzer.ets # 代码语法高亮分析器
+│   │   │   └── plugins/
+│   │   │       └── latex.ets             # 数学公式插件
+│   │   ├── extensions.ets               # 扩展机制
+│   │   ├── merge.ts                     # 深度合并工具
+│   │   └── utils.ets                    # 工具函数（含 TaskPool 解析入口）
+│   └── oh-package.json5
+│
+├── screen/                                # 应用截图
+├── oh-package.json5                       # 项目级 ohpm 配置
+├── build-profile.json5                    # HarmonyOS 构建配置
+└── hvigorfile.ts                          # Hvigor 构建脚本
 ```
 
----
 
 ## 环境要求
 
-| 项目     | 要求                         |
-| -------- | ---------------------------- |
-| 操作系统 | Windows 10/11, macOS         |
-| IDE      | DevEco Studio 5.0 及以上     |
-| SDK      | HarmonyOS SDK API 15 (5.0.3) |
-| 运行时   | HarmonyOS                    |
-| 语言     | ArkTS (TypeScript 严格模式)  |
+| 项目 | 要求 |
+|------|------|
+| 操作系统 | Windows 10/11, macOS, Linux |
+| IDE | DevEco Studio 5.0+ |
+| SDK | HarmonyOS SDK API 15 (5.0.3) |
+| 目标设备 | HarmonyOS 手机 / 平板 / 模拟器 |
+| 运行时 | HarmonyOS NEXT |
+| 语言 | ArkTS |
 
----
+### 兼容性
+
+| 平台 | 支持 | 备注 |
+|------|------|------|
+| HarmonyOS 手机 | ✅ | 主力适配 |
+| HarmonyOS 平板 | ✅ | 分屏体验更佳 |
+| HarmonyOS 模拟器 | ✅ | 开发调试 |
+| Android / iOS | ❌ | ArkUI 专属 |
+
 
 ## 快速开始
 
@@ -161,131 +272,183 @@ Harmony-Markdown-Editor/
 git clone https://github.com/electronicminer/Harmony-Markdown-Editor.git
 ```
 
-### 2. 使用 DevEco Studio 打开项目
+### 2. DevEco Studio 打开
 
-1. 打开 DevEco Studio
-2. 选择 `File` > `Open`，导航到克隆的项目目录
-3. 等待 IDE 完成项目同步与依赖下载
+启动 DevEco Studio，选择 **File > Open**，选中项目根目录。IDE 会自动同步依赖。
 
 ### 3. 配置签名
 
-1. 进入 `File` > `Project Structure` > `Signing Configs`
-2. 勾选 `Automatically generate signature` 或手动配置签名证书
+**File > Project Structure > Signing Configs**，勾选 Automatically generate signing，或自行配置证书文件。
 
-### 4. 运行项目
+### 4. 配置华为云服务（可选）
 
-1. 连接 HarmonyOS 真机或启动模拟器
-2. 选择目标设备
-3. 点击 `Run` 按钮（或按 `Shift + F10`）编译并安装应用
+如需使用云端同步功能，需参考[配置 AGConnect](#配置-agconnect) 章节完成华为云服务配置。
 
----
+### 5. 运行
 
-## 使用方法
+连接真机或启动模拟器，在 DevEco Studio 中选择目标设备，点击 **Run**。
 
-### 基本编辑
 
-1. 启动应用后进入首页，默认展示一份示例 Markdown 文档的渲染效果
-2. 点击顶部导航栏的编辑按钮进入编辑器，或点击 `+` 按钮新建空白文档
-3. 编辑器默认以分屏模式运行，左侧为编辑区，右侧为实时预览区
-4. 使用顶部工具栏的快捷按钮可快速插入 Markdown 格式语法
-5. 长按拖拽分隔线可调整左右面板的宽度比例
+## 使用指南
 
-### 视图切换
+### 首页浏览
 
-- 点击顶部导航栏的视图切换按钮，可在三种模式之间循环切换：
-  - **分屏对比** -- 编辑区 + 预览区同时显示
-  - **仅编辑** -- 全屏编辑模式
-  - **仅预览** -- 全屏预览模式
+启动应用后进入首页，默认加载内置的示例 Markdown 文档并实时渲染。首页功能：
 
-### 文件操作
+| 按钮 | 功能 |
+|------|------|
+| ⚙️ | 打开设置（视图模式、深色模式、自动保存、AI 配置等） |
+| 🌙/☀️ | 切换深色/浅色主题 |
+| 📂 | 从设备选择 `.md` 文件打开 |
+| + | 新建空白文档进入编辑器 |
+| ✏️ | 编辑当前预览的文档 |
+| ☁️ | 进入云文档管理列表 |
+| 👤 | 登录 / 注册 / 个人中心 |
 
-- **打开文件**：在首页点击文件夹按钮，从设备存储中选择 `.md` 文件
-- **保存文件**：在编辑器中点击保存按钮，首次保存时弹出路径选择器
-- **自动保存**：在设置中开启自动保存并设置间隔时间（单位为秒）
+### 编辑器操作
 
-### 主题设置
+编辑器采用分屏布局，支持三种视图模式：
 
-- 点击深色/浅色模式切换按钮可手动切换主题
-- 在设置中开启"跟随系统深色模式"后，应用将自动匹配系统主题
+| 模式 | 说明 | 切换键 |
+|------|------|--------|
+| 分屏 | 左侧编辑 + 右侧实时预览，可拖拽调整比例 | 🌗 |
+| 仅编辑 | 全屏编辑 | ✏️ |
+| 仅预览 | 全屏预览渲染效果 | 👁️ |
 
-### 使用 AI 助手
+**工具栏：**
 
-1. 在编辑器顶部导航栏点击 AI 按钮开启 AI 面板
-2. 首次使用前需在设置中配置 AI 参数：
-   - **API URL**：填入 OpenAI 兼容格式的 API 地址（如 `https://api.openai.com/v1/chat/completions`）
-   - **API Key**：填入对应的 API 密钥
-   - **模型名称**：填入要使用的模型（如 `gpt-3.5-turbo`、`gpt-4` 等）
-   - **系统提示词**：可自定义 AI 的角色定位和行为规则
-3. 点击"测试连接"验证配置是否正确
-4. 在 AI 面板中输入问题或修改指令，AI 将给出回复
-5. 当 AI 提出文档修改方案时，面板中会弹出操作确认卡片
-6. 点击"允许执行 (Act)"按钮即可将修改自动应用到文档
+- **Undo / Redo**：撤销和重做操作
+- **H1 / H2**：插入一级/二级标题
+- **Bold / Italic**：加粗 / 斜体
+- **Code**：代码块
+- **Link / Image**：链接 / 图片
+- **UL / OL**：无序列表 / 有序列表
 
-### 偏好设置
+### 云端文档
 
-进入设置对话框可配置以下选项：
+1. 在首页点击 👤 进入登录页，使用邮箱验证码注册或登录
+2. 打开或创建一个文档进入编辑器
+3. 点击 ☁️ 按钮将当前文档上传到云端
+4. 在首页点击 ☁️ 进入云文档管理页面
 
-- 默认视图模式（分屏对比 / 仅编辑 / 仅预览）
-- 跟随系统深色模式
-- 深色模式手动开关
-- 启动时打开上次文件
-- 自动保存及保存间隔
-- AI 配置
+**文档分享：**
 
----
+- 在文档列表中点击 **分享**，复制文档 ID 发送给他人
+- 可**按邮箱添加协作者**，协作者登录后可在"分享给我"列表查看
+- 开启**公开访问**后，任何人凭文档 ID 即可查看
 
-## 部署平台
+### AI 助手
 
-### HarmonyOS 真机部署
+编辑器内点击 🤖 按钮展开 AI 面板。首次使用时需在 **设置 > AI 配置** 中配置 API 信息：
 
-本项目专为 HarmonyOS 平台开发，支持部署到以下设备：
+- **API URL**：兼容 OpenAI 格式的 API 地址
+- **API Key**：你的 API 密钥
+- **模型名称**：如 `gpt-3.5-turbo`、`gpt-4` 等
+- **系统提示词**：自定义 AI 的行为角色
 
-- **平板**：运行 HarmonyOS 的华为平板（如 MatePad 系列），编辑器的分屏布局在大屏设备上体验更佳
+配置完成后点击 **测试连接** 验证连通性。
 
-部署步骤：
+**工作流程：**
 
-1. 使用 DevEco Studio 构建 Release 版本的 HAP 包
-2. 通过 USB 连接目标设备，使用 IDE 直接安装
-3. 或将 HAP 包通过 AppGallery Connect 提交审核后上架分发
+1. 在 AI 面板输入问题或指令
+2. AI 回复普通文字，或给出文档修改建议
+3. 如果是修改建议，会弹出确认卡片
+4. 点击 **允许执行 (Act)** 确认修改，**拒绝**放弃
 
-### HarmonyOS 模拟器
+### 设置项
 
-DevEco Studio 内置模拟器支持快速调试：
+| 设置 | 说明 |
+|------|------|
+| 默认视图模式 | 分屏 / 仅编辑 / 仅预览 |
+| 跟随系统深色模式 | 自动跟随系统主题切换 |
+| 深色模式 | 手动切换（跟随系统开启时禁用） |
+| 启动时打开上次文件 | 下次启动自动恢复上次文档 |
+| 自动保存 | 定时自动保存文档 |
+| 自动保存间隔 | 保存频率（秒） |
+| AI 配置 | API URL / Key / 模型 / 系统提示词 |
 
-1. 在 DevEco Studio 中打开 `Tools` > `Device Manager`
-2. 创建或启动 HarmonyOS 模拟器
-3. 选择模拟器作为运行目标，点击 `Run` 部署应用
 
-### 兼容性说明
+## 配置 AGConnect
 
-| 平台             | 支持状态 | 备注                          |
-| ---------------- | -------- | ----------------------------- |
-| HarmonyOS 手机   | 部分支持 | 未适配大小与比例              |
-| HarmonyOS 平板   | 完全支持 | 推荐在pad端使用               |
-| HarmonyOS 模拟器 | 完全支持 | 开发调试使用                  |
-| Android / iOS    | 不支持   | 使用 ArkUI 原生框架，不跨平台 |
+要启用云端同步和用户认证功能，需在华为 AppGallery Connect 上创建应用并开通相关服务。
 
----
+### 步骤
+
+1. 登录 [AppGallery Connect](https://developer.huawei.com/consumer/cn/service/josp/agc/index.html)
+2. 创建应用，包名填写 `com.wzq123.makedown_editor1223456.huawei`
+3. 开通 **Authentication**：
+   - 启用 **邮箱验证码** 登录方式
+4. 开通 **Cloud DB**：
+   - 创建数据库区 `HMarkdownZone`
+   - 新建对象类型 `UserDocument`，包含字段：
+
+| 字段名 | 类型 | 说明 |
+|--------|------|------|
+| `id` | String | 文档唯一 ID |
+| `ownerId` | String | 创建者 UID |
+| `title` | String | 标题 |
+| `content` | String | Markdown 正文 |
+| `createdAt` | Number | 创建时间戳 |
+| `updatedAt` | Number | 更新时间戳 |
+| `isPublic` | Boolean | 是否公开 |
+| `sharedWith` | String | 协作者邮箱列表（逗号分隔） |
+
+5. 下载 `agconnect-services.json` 放入 `entry/src/main/resources/rawfile/`
+
+> **注意**：Cloud DB 不可用时，应用会自动降级为本地 JSON 文件存储，不影响正常使用。
+
 
 ## 技术栈
 
-- **开发语言**：ArkTS (TypeScript 严格模式下的鸿蒙方言)
-- **UI 框架**：ArkUI 声明式 UI (Component V1 + V2)
-- **Markdown 解析**：基于 `marked` 的自定义渲染管线
-- **并发模型**：TaskPool 多线程解析，主线程不阻塞
-- **数据持久化**：Preferences 轻量级键值存储
-- **文件操作**：Core File Kit (fileIo)
-- **网络请求**：Network Kit (http) -- 用于 AI API 调用
-- **构建工具**：Hvigor
+| 类别 | 技术 |
+|------|------|
+| 语言 | [ArkTS](https://developer.harmonyos.com/cn/docs/documentation/doc-guides/arkts-overview-0000001828699769) |
+| UI 框架 | [ArkUI](https://developer.harmonyos.com/cn/docs/documentation/doc-guides/arkui-overview-0000001828699809)（声明式 UI） |
+| 认证服务 | [华为 AGConnect Auth](https://developer.huawei.com/consumer/cn/doc/development/AppGallery-connect-Guides/agc-auth-service-introduction-0000001053732609) |
+| 云数据库 | [华为 Cloud DB](https://developer.huawei.com/consumer/cn/doc/development/AppGallery-connect-Guides/agc-clouddb-introduction-0000001054373458) |
+| Markdown 解析 | 基于 `marked` 的自定义 ArkTS 渲染管线 |
+| 多线程 | TaskPool（子线程解析 Markdown） |
+| 数据持久化 | Preferences 键值存储 + 本地 JSON 文件 |
+| 文件操作 | Core File Kit（fileIo） |
+| 网络请求 | Network Kit（http） |
+| 构建工具 | Hvigor |
+| 备份恢复 | HarmonyOS Backup Extension |
 
----
+
+## Star 历史
+
+[![Star History Chart](https://api.star-history.com/svg?repos=electronicminer/Harmony-Markdown-Editor&type=Date)](https://star-history.com/#electronicminer/Harmony-Markdown-Editor&Date)
+
+
+## 贡献者
+
+欢迎任何形式的贡献 — 提交 Issue、Pull Request，或在 [GitHub Discussions](https://github.com/electronicminer/Harmony-Markdown-Editor/discussions) 参与讨论。
+
 
 ## 许可证
 
-本项目基于 [MIT License](LICENSE) 开源。
+本项目基于 MIT 许可证开源。详见 [LICENSE](LICENSE)。
 
 ```
 MIT License
 
 Copyright (c) 2026 electronicminer
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 ```
