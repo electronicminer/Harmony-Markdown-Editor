@@ -34,6 +34,7 @@ struct CloudDocsPage {
     if (params && params['isDark'] !== undefined) {
       this.isDark = params['isDark'] as boolean;
     }
+    CloudDBService.forceCloudMode();
     this.loadDocuments();
   }
 

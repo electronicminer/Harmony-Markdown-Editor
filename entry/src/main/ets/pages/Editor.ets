@@ -402,8 +402,21 @@ struct Editor {
       }
     }
 
-    const doc = new UserDocument();
-    doc.id = this.cloudDocId;
+    // 如果已有云端文档，先查出原文档保留元数据；否则新建
+    let doc: UserDocument;
+    if (this.cloudDocId) {
+      const existing = await CloudDBService.getDocumentById(this.cloudDocId);
+      if (existing) {
+        doc = existing;
+      } else {
+        doc = new UserDocument();
+        doc.id = this.cloudDocId;
+        doc.ownerId = user.uid;
+        doc.createdAt = Date.now();
+      }
+    } else {
+      doc = new UserDocument();
+    }
     doc.content = this.markdownText;
     doc.title = this.markdownText.split('\n')[0]?.replace(/^#+\s*/, '').trim() || 'Untitled';
 

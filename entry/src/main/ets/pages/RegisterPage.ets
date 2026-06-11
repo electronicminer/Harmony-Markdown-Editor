@@ -12,10 +12,10 @@ struct RegisterPage {
   @State isSendingCode: boolean = false;
   @State isSubmitting: boolean = false;
   @State countdown: number = 0;
-  @State statusText: string = '使用邮箱验证码完成注册并自动登录';
+  @State statusText: string = '使用邮箱和密码登录';
   @State currentUser: CurrentUserInfo | null = null;
   @State showRegistrationForm: boolean = false;
-  @State isLoginMode: boolean = false;
+  @State isLoginMode: boolean = true;
   @State passwordStrength: number = 0;
   @State profileNickname: string = '';
   @State profileBio: string = '';
