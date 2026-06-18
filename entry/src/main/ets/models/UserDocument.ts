@@ -1,4 +1,5 @@
 import { cloudDatabase } from '@kit.CloudFoundationKit';
+import { util } from '@kit.ArkTS';
 
 export class UserDocument extends cloudDatabase.DatabaseObject {
   id: string = '';
@@ -32,12 +33,7 @@ export class UserDocument extends cloudDatabase.DatabaseObject {
   }
 
   static generateId(): string {
-    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-    let result = Date.now().toString(36);
-    for (let i = 0; i < 8; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
+    return `${Date.now().toString(36)}-${util.generateRandomUUID()}`;
   }
 
   getDisplayTitle(): string {

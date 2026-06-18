@@ -5,12 +5,18 @@ import { pasteboard } from '@kit.BasicServicesKit';
 
 @CustomDialog
 export struct ShareDialog {
+  private static readonly EMAIL_REGEX: RegExp = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
   controller: CustomDialogController;
   @Link doc: UserDocument;
   @Link isDark: boolean;
   @State shareEmail: string = '';
   @State isSaving: boolean = false;
   onRefresh: () => void = () => {};
+
+  private isValidEmail(email: string): boolean {
+    return ShareDialog.EMAIL_REGEX.test(email);
+  }
 
   build() {
     Column({ space: 16 }) {
@@ -122,11 +128,22 @@ export struct ShareDialog {
             .type(ButtonType.Capsule)
             .height(40)
             .onClick(() => {
-              if (this.shareEmail.trim()) {
-                this.doc.addSharedUser(this.shareEmail.trim());
-                this.shareEmail = '';
-                promptAction.showToast({ message: '已添加', duration: 1500 });
+              const trimmedEmail = this.shareEmail.trim();
+              if (!trimmedEmail) {
+                promptAction.showToast({ message: '请输入邮箱地址', duration: 1500 });
+                return;
               }
+              if (!this.isValidEmail(trimmedEmail)) {
+                promptAction.showToast({ message: '邮箱格式不正确', duration: 1500 });
+                return;
+              }
+              if (this.doc.isSharedWithUser(trimmedEmail)) {
+                promptAction.showToast({ message: '该邮箱已是协作者', duration: 1500 });
+                return;
+              }
+              this.doc.addSharedUser(trimmedEmail);
+              this.shareEmail = '';
+              promptAction.showToast({ message: '已添加', duration: 1500 });
             })
         }
         .width('100%')

@@ -21,6 +21,32 @@ export interface AuthActionResult {
 
 export class AuthService {
   private static readonly VERIFY_CODE_INTERVAL: number = 60;
+  private static readonly PASSWORD_MIN_LENGTH: number = 8;
+  private static readonly PASSWORD_MIN_STRENGTH: number = 3;
+
+  private static validatePassword(password: string): { valid: boolean; message: string } {
+    if (password.length < AuthService.PASSWORD_MIN_LENGTH) {
+      return {
+        valid: false,
+        message: `密码长度至少为${AuthService.PASSWORD_MIN_LENGTH}位`
+      };
+    }
+
+    let strength = 0;
+    if (/[a-z]/.test(password)) strength++;
+    if (/[A-Z]/.test(password)) strength++;
+    if (/[0-9]/.test(password)) strength++;
+    if (/[^a-zA-Z0-9]/.test(password)) strength++;
+
+    if (strength < AuthService.PASSWORD_MIN_STRENGTH) {
+      return {
+        valid: false,
+        message: '密码必须包含大小写字母、数字、特殊字符中的至少3种'
+      };
+    }
+
+    return { valid: true, message: '' };
+  }
 
   static async sendCode(email: string): Promise<AuthActionResult> {
     const trimmedEmail: string = email.trim();
@@ -74,24 +100,11 @@ export class AuthService {
 
     // 华为 AGConnect 密码强度要求
     if (trimmedPassword.length > 0) {
-      if (trimmedPassword.length < 8) {
+      const validation = AuthService.validatePassword(trimmedPassword);
+      if (!validation.valid) {
         return {
           success: false,
-          message: '密码长度至少为8位'
-        };
-      }
-
-      // 检查密码强度：必须包含大小写字母、数字、特殊字符中的至少3种
-      let strength = 0;
-      if (/[a-z]/.test(trimmedPassword)) strength++; // 小写字母
-      if (/[A-Z]/.test(trimmedPassword)) strength++; // 大写字母
-      if (/[0-9]/.test(trimmedPassword)) strength++; // 数字
-      if (/[^a-zA-Z0-9]/.test(trimmedPassword)) strength++; // 特殊字符
-
-      if (strength < 3) {
-        return {
-          success: false,
-          message: '密码必须包含大小写字母、数字、特殊字符中的至少3种'
+          message: validation.message
         };
       }
     }
@@ -247,10 +260,11 @@ export class AuthService {
       };
     }
 
-    if (trimmedPassword.length < 6) {
+    const validation = AuthService.validatePassword(trimmedPassword);
+    if (!validation.valid) {
       return {
         success: false,
-        message: '密码长度至少为6位'
+        message: validation.message
       };
     }
 

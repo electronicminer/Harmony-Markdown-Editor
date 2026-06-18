@@ -72,7 +72,7 @@ export class CloudDBService {
   }
 
   static isAvailable(): boolean {
-    if (CloudDBService.isDemoMode) return true;
+    if (CloudDBService.isDemoMode) return false;
     try {
       cloudDatabase.zone(ZONE_NAME);
       return true;
@@ -88,9 +88,15 @@ export class CloudDBService {
   }
 
   // CloudDB 操作失败时自动回退到 demo 模式
-  private static switchToDemoMode(reason: string): void {
+  private static switchToDemoMode(reason: string, err?: unknown): void {
     if (!CloudDBService.isDemoMode) {
       console.warn(`[CloudDB] 云端不可用（${reason}），自动切换到本地模式`);
+      if (err) {
+        console.error('[CloudDB] 完整错误对象:', JSON.stringify(err));
+        if (err instanceof Error) {
+          console.error('[CloudDB] 错误堆栈:', err.stack);
+        }
+      }
       CloudDBService.isDemoMode = true;
       CloudDBService.dbZone = null;
     }
@@ -121,7 +127,7 @@ export class CloudDBService {
     } catch (e) {
       const msg = CloudDBService.getErrorMessage(e);
       console.error('[CloudDB] 保存失败:', msg);
-      CloudDBService.switchToDemoMode(msg);
+      CloudDBService.switchToDemoMode(msg, e);
       return CloudDBService.demoSave(doc, isNew);
     }
   }
@@ -164,7 +170,7 @@ export class CloudDBService {
       query.orderByDesc('updatedAt');
       return await CloudDBService.dbZone!.query(query);
     } catch (e) {
-      CloudDBService.switchToDemoMode(CloudDBService.getErrorMessage(e));
+      CloudDBService.switchToDemoMode(CloudDBService.getErrorMessage(e), e);
       return CloudDBService.demoGetMyDocs(user.uid);
     }
   }
@@ -198,7 +204,7 @@ export class CloudDBService {
       const allDocs = await CloudDBService.dbZone!.query(query);
       return allDocs.filter(doc => doc.isSharedWithUser(user.email));
     } catch (e) {
-      CloudDBService.switchToDemoMode(CloudDBService.getErrorMessage(e));
+      CloudDBService.switchToDemoMode(CloudDBService.getErrorMessage(e), e);
       return CloudDBService.demoGetSharedWithMe(user.uid, user.email);
     }
   }
@@ -229,7 +235,7 @@ export class CloudDBService {
       const docs = await CloudDBService.dbZone!.query(query);
       return docs.length > 0 ? docs[0] : null;
     } catch (e) {
-      CloudDBService.switchToDemoMode(CloudDBService.getErrorMessage(e));
+      CloudDBService.switchToDemoMode(CloudDBService.getErrorMessage(e), e);
       return CloudDBService.demoGetById(id);
     }
   }
@@ -261,7 +267,7 @@ export class CloudDBService {
       await CloudDBService.dbZone!.delete(doc);
       return { success: true, message: '已从云端删除' };
     } catch (e) {
-      CloudDBService.switchToDemoMode(CloudDBService.getErrorMessage(e));
+      CloudDBService.switchToDemoMode(CloudDBService.getErrorMessage(e), e);
       return CloudDBService.demoDelete(doc);
     }
   }

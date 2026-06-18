@@ -1,4 +1,5 @@
 import { promptAction, router } from '@kit.ArkUI';
+import { http } from '@kit.NetworkKit';
 import { AuthService } from '../utils/AuthService';
 import { CloudDBService } from '../utils/CloudDBService';
 import { UserDocument } from '../models/UserDocument';
@@ -29,13 +30,25 @@ struct CloudDocsPage {
     customStyle: true
   });
 
+
   aboutToAppear(): void {
     const params = router.getParams() as Record<string, Object>;
     if (params && params['isDark'] !== undefined) {
       this.isDark = params['isDark'] as boolean;
     }
+    this.testNetwork();
     CloudDBService.forceCloudMode();
     this.loadDocuments();
+  }
+
+  async testNetwork(): Promise<void> {
+    try {
+      const httpRequest = http.createHttp();
+      const response = await httpRequest.request('https://www.baidu.com', { method: http.RequestMethod.GET });
+      console.info('[CloudDB] 网络测试成功，响应码:', response.responseCode);
+    } catch (e) {
+      console.error('[CloudDB] 网络测试失败:', JSON.stringify(e));
+    }
   }
 
   async loadDocuments(): Promise<void> {
@@ -57,6 +70,8 @@ struct CloudDocsPage {
     ]);
     this.myDocs = results[0];
     this.sharedDocs = results[1];
+    // 查询完成后再次检查连接状态，防止 init() 成功但实际查询失败回退到本地模式
+    this.isCloudConnected = !CloudDBService.isDemoMode;
     this.isLoading = false;
   }
 
