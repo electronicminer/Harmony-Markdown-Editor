@@ -1,18 +1,24 @@
-import { cloudDatabase } from '@kit.CloudFoundationKit';
 import { util } from '@kit.ArkTS';
+import Long from 'long';
 
-export class UserDocument extends cloudDatabase.DatabaseObject {
+export class UserDocument {
+  static readonly className: string = 'UserDocument';
+
   id: string = '';
   ownerId: string = '';
   title: string = '';
   content: string = '';
-  createdAt: number = 0;
-  updatedAt: number = 0;
+  createdAt: Long = Long.ZERO;
+  updatedAt: Long = Long.ZERO;
   isPublic: boolean = false;
   sharedWith: string = '';
 
-  naturalbase_ClassName(): string {
-    return 'UserDocument';
+  static toLong(v: Object | undefined | null): Long {
+    if (v === undefined || v === null) return Long.ZERO;
+    if (Long.isLong(v)) return v as Long;
+    if (typeof v === 'number') return Long.fromNumber(v);
+    if (typeof v === 'string') return Long.fromString(v);
+    return Long.fromValue(v as Long | number | string);
   }
 
   static fromMap(map: Record<string, Object>): UserDocument {
@@ -21,8 +27,8 @@ export class UserDocument extends cloudDatabase.DatabaseObject {
     doc.ownerId = String(map['ownerId'] || '');
     doc.title = String(map['title'] || '');
     doc.content = String(map['content'] || '');
-    doc.createdAt = Number(map['createdAt'] || 0);
-    doc.updatedAt = Number(map['updatedAt'] || 0);
+    doc.createdAt = UserDocument.toLong(map['createdAt']);
+    doc.updatedAt = UserDocument.toLong(map['updatedAt']);
     if (typeof map['isPublic'] === 'boolean') {
       doc.isPublic = map['isPublic'] as boolean;
     } else {
@@ -43,8 +49,8 @@ export class UserDocument extends cloudDatabase.DatabaseObject {
   }
 
   getFormattedDate(): string {
-    if (!this.updatedAt) return '';
-    const date = new Date(this.updatedAt);
+    if (!this.updatedAt || this.updatedAt.isZero()) return '';
+    const date = new Date(this.updatedAt.toNumber());
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
     const day = date.getDate().toString().padStart(2, '0');
     const hours = date.getHours().toString().padStart(2, '0');

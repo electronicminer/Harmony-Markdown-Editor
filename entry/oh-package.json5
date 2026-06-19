@@ -9,6 +9,11 @@
     "@lidary/markdown": "file:../Markdown",
     "@hw-agconnect/api-ohos": "^1.x.x",
     "@hw-agconnect/auth-ohos": "^1.x.x",
-    "@hw-agconnect/core-ohos": "^1.x.x"
-  }
+    "@hw-agconnect/core-ohos": "^1.x.x",
+    "@hw-agconnect/database-ohos": "^1.1.2",
+    "long": "^4.0.0",
+    "@types/long": "^4.0.2"
+  },
+  "devDependencies": {},
+  "dynamicDependencies": {}
 }

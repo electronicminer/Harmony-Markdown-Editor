@@ -1,11 +1,20 @@
-import { cloudDatabase } from '@kit.CloudFoundationKit';
+import {
+  AGConnectCloudDB,
+  CloudDBZone,
+  CloudDBZoneQuery
+} from '@hw-agconnect/database-ohos';
+import '@hw-agconnect/core-ohos';
+import '@hw-agconnect/auth-ohos';
 import { UserDocument } from '../models/UserDocument';
 import { AuthService } from './AuthService';
 import { common } from '@kit.AbilityKit';
 import { fileIo as fs } from '@kit.CoreFileKit';
+import { util } from '@kit.ArkTS';
+import Long from 'long';
 
 const ZONE_NAME = 'HMarkdownZone';
 const DEMO_FILE_NAME = 'cloud_docs_demo.json';
+const SCHEMA_FILE_NAME = 'schema.json';
 
 interface CloudDocumentJson {
   id: string;
@@ -24,8 +33,16 @@ interface ServiceResult {
   data?: object;
 }
 
+interface ObjectTypeInfoJson {
+  schemaVersion: number;
+  objectTypes: Object[];
+  permissions: Object[];
+}
+
 export class CloudDBService {
-  private static dbZone: cloudDatabase.DatabaseZone | null = null;
+  private static cloudDB: AGConnectCloudDB | null = null;
+  private static dbZone: CloudDBZone | null = null;
+  private static cloudInitDone: boolean = false;
   static isDemoMode: boolean = false;
 
   private static getContext(): common.UIAbilityContext {
@@ -57,24 +74,44 @@ export class CloudDBService {
 
   // ==================== 初始化 ====================
 
+  private static async initCloudOnce(): Promise<void> {
+    if (CloudDBService.cloudInitDone) return;
+    const ctx = CloudDBService.getContext();
+
+    await AGConnectCloudDB.initialize(ctx);
+    const db = await AGConnectCloudDB.getInstance();
+
+    const raw: Uint8Array = await ctx.resourceManager.getRawFileContent(SCHEMA_FILE_NAME);
+    const text: string = util.TextDecoder.create('utf-8').decodeWithStream(raw);
+    const schema: ObjectTypeInfoJson = JSON.parse(text) as ObjectTypeInfoJson;
+    db.createObjectType(schema);
+
+    CloudDBService.cloudDB = db;
+    CloudDBService.cloudInitDone = true;
+    console.info('[CloudDB] AGConnect Cloud DB 已初始化');
+  }
+
   static async init(): Promise<boolean> {
     if (CloudDBService.dbZone) return true;
     if (CloudDBService.isDemoMode) return true;
 
     try {
-      CloudDBService.dbZone = cloudDatabase.zone(ZONE_NAME);
+      await CloudDBService.initCloudOnce();
+      CloudDBService.dbZone = await CloudDBService.cloudDB!.openCloudDBZone(ZONE_NAME);
+      console.info('[CloudDB] Zone 已打开:', ZONE_NAME);
       return true;
     } catch (e) {
       console.warn('[CloudDB] 初始化失败，使用本地模式');
+      console.error('[CloudDB] init 错误:', JSON.stringify(e));
       CloudDBService.isDemoMode = true;
       return true;
     }
   }
 
-  static isAvailable(): boolean {
+  static async isAvailable(): Promise<boolean> {
     if (CloudDBService.isDemoMode) return false;
     try {
-      cloudDatabase.zone(ZONE_NAME);
+      await CloudDBService.initCloudOnce();
       return true;
     } catch {
       return false;
@@ -110,19 +147,20 @@ export class CloudDBService {
     if (!user) return { success: false, message: '请先登录' };
 
     const isNew = !doc.id;
+    const now = Long.fromNumber(Date.now());
     if (isNew) {
       doc.id = UserDocument.generateId();
       doc.ownerId = user.uid;
-      doc.createdAt = Date.now();
+      doc.createdAt = now;
     }
-    doc.updatedAt = Date.now();
+    doc.updatedAt = now;
 
     if (CloudDBService.isDemoMode) {
       return CloudDBService.demoSave(doc, isNew);
     }
 
     try {
-      await CloudDBService.dbZone!.upsert(doc);
+      await CloudDBService.dbZone!.executeUpsert(doc);
       return { success: true, message: isNew ? '已上传到云端' : '已同步到云端', data: doc };
     } catch (e) {
       const msg = CloudDBService.getErrorMessage(e);
@@ -138,7 +176,9 @@ export class CloudDBService {
       const idx = docs.findIndex(d => d.id === doc.id);
       const json: CloudDocumentJson = {
         id: doc.id, ownerId: doc.ownerId, title: doc.title,
-        content: doc.content, createdAt: doc.createdAt, updatedAt: doc.updatedAt,
+        content: doc.content,
+        createdAt: doc.createdAt.toNumber(),
+        updatedAt: doc.updatedAt.toNumber(),
         isPublic: doc.isPublic, sharedWith: doc.sharedWith
       };
       if (idx >= 0) {
@@ -165,10 +205,11 @@ export class CloudDBService {
     }
 
     try {
-      const query = new cloudDatabase.DatabaseQuery(UserDocument);
-      query.equalTo('ownerId', user.uid);
-      query.orderByDesc('updatedAt');
-      return await CloudDBService.dbZone!.query(query);
+      const query = CloudDBZoneQuery.where(UserDocument)
+        .equalTo('ownerId', user.uid)
+        .orderByDesc('updatedAt');
+      const snapshot = await CloudDBService.dbZone!.executeQuery(query);
+      return snapshot.getSnapshotObjects();
     } catch (e) {
       CloudDBService.switchToDemoMode(CloudDBService.getErrorMessage(e), e);
       return CloudDBService.demoGetMyDocs(user.uid);
@@ -198,11 +239,11 @@ export class CloudDBService {
     }
 
     try {
-      const query = new cloudDatabase.DatabaseQuery(UserDocument);
-      query.notEqualTo('ownerId', user.uid);
-      query.orderByDesc('updatedAt');
-      const allDocs = await CloudDBService.dbZone!.query(query);
-      return allDocs.filter(doc => doc.isSharedWithUser(user.email));
+      const query = CloudDBZoneQuery.where(UserDocument)
+        .notEqualTo('ownerId', user.uid)
+        .orderByDesc('updatedAt');
+      const snapshot = await CloudDBService.dbZone!.executeQuery(query);
+      return snapshot.getSnapshotObjects().filter(doc => doc.isSharedWithUser(user.email));
     } catch (e) {
       CloudDBService.switchToDemoMode(CloudDBService.getErrorMessage(e), e);
       return CloudDBService.demoGetSharedWithMe(user.uid, user.email);
@@ -214,7 +255,7 @@ export class CloudDBService {
       return CloudDBService.readDemoDocs()
         .map(d => UserDocument.fromMap(d as unknown as Record<string, Object>))
         .filter(doc => doc.ownerId !== uid && doc.isSharedWithUser(email))
-        .sort((a, b) => b.updatedAt - a.updatedAt);
+        .sort((a, b) => b.updatedAt.compare(a.updatedAt));
     } catch {
       return [];
     }
@@ -230,9 +271,9 @@ export class CloudDBService {
     }
 
     try {
-      const query = new cloudDatabase.DatabaseQuery(UserDocument);
-      query.equalTo('id', id);
-      const docs = await CloudDBService.dbZone!.query(query);
+      const query = CloudDBZoneQuery.where(UserDocument).equalTo('id', id);
+      const snapshot = await CloudDBService.dbZone!.executeQuery(query);
+      const docs = snapshot.getSnapshotObjects();
       return docs.length > 0 ? docs[0] : null;
     } catch (e) {
       CloudDBService.switchToDemoMode(CloudDBService.getErrorMessage(e), e);
@@ -264,7 +305,7 @@ export class CloudDBService {
     }
 
     try {
-      await CloudDBService.dbZone!.delete(doc);
+      await CloudDBService.dbZone!.executeDelete(doc);
       return { success: true, message: '已从云端删除' };
     } catch (e) {
       CloudDBService.switchToDemoMode(CloudDBService.getErrorMessage(e), e);
@@ -285,7 +326,7 @@ export class CloudDBService {
   // ==================== 更新分享设置 ====================
 
   static async updateSharing(doc: UserDocument): Promise<ServiceResult> {
-    doc.updatedAt = Date.now();
+    doc.updatedAt = Long.fromNumber(Date.now());
     return await CloudDBService.saveDocument(doc);
   }
 

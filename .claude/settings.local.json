@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep -l \"getErrorMessage\")",
+      "Bash(where deveco *)",
+      "Bash(dir \"C:\\\\Program Files\\\\Huawei\\\\DevEco Studio\\\\sdk\" /b)"
+    ]
+  }
+}

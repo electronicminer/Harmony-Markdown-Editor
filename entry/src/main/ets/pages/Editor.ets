@@ -15,6 +15,7 @@ import { CloudDBService } from '../utils/CloudDBService';
 import { AuthService } from '../utils/AuthService';
 import { UserDocument } from '../models/UserDocument';
 import { ShareDialog } from '../components/ShareDialog';
+import Long from 'long';
 // 自动补全功能导入（已注释）
 // import { CompletionItem, filterCompletions, checkTrigger, TriggerInfo, CompletionItemType } from '../utils/MarkdownCompletions';
 
@@ -412,7 +413,7 @@ struct Editor {
         doc = new UserDocument();
         doc.id = this.cloudDocId;
         doc.ownerId = user.uid;
-        doc.createdAt = Date.now();
+        doc.createdAt = Long.fromNumber(Date.now());
       }
     } else {
       doc = new UserDocument();
