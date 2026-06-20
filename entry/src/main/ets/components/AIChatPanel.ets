@@ -186,14 +186,18 @@ export struct AIChatPanel {
     if (step.note && step.note.length > 0) {
       return step.note;
     }
+    // 行号范围描述
+    const range: string = (typeof step.startLine === 'number' && step.startLine > 0)
+      ? (step.endLine && step.endLine > step.startLine ? `第 ${step.startLine}-${step.endLine} 行` : `第 ${step.startLine} 行`)
+      : (step.anchor ? `「${this.truncate(step.anchor, 14)}」` : '');
     switch (step.action) {
       case 'replace':
       case 'replace_content':
-        return `替换「${this.truncate(step.anchor, 16)}」→「${this.truncate(step.content, 16)}」`;
+        return `替换${range} → 「${this.truncate(step.content, 16)}」`;
       case 'insert_after':
-        return `在「${this.truncate(step.anchor, 16)}」之后插入`;
+        return `在${range}之后插入「${this.truncate(step.content, 14)}」`;
       case 'insert_before':
-        return `在「${this.truncate(step.anchor, 16)}」之前插入`;
+        return `在${range}之前插入「${this.truncate(step.content, 14)}」`;
       case 'append':
       case 'append_content':
       case 'insert_content':
@@ -202,9 +206,7 @@ export struct AIChatPanel {
         return `在文首插入「${this.truncate(step.content, 20)}」`;
       case 'delete':
       case 'delete_content':
-        return step.endAnchor
-          ? `删除整段：从「${this.truncate(step.anchor, 12)}」到「${this.truncate(step.endAnchor, 12)}」`
-          : `删除「${this.truncate(step.anchor, 20)}」`;
+        return `删除${range}`;
       default:
         return '未知操作';
     }

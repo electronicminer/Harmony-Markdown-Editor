@@ -50,32 +50,13 @@ export struct TableHeader {
 
     Row() {
       ForEach(this.tokens, (item: Tokens.TableCell, index: number) => {
-        Text(item.text)
-          .fontWeight(FontWeight.Bold)
-          .textAlign(textAlign(item.align))
-          .padding({
-            top: 10,
-            bottom: 10,
-            left: 8,
-            right: 8
-          })
-          .maxLines(1)
-          .width(this.itemMaxWidth[index])
-          .fontColor(this.theme.fontStyle?.fontColor)
-          .fontSize(this.theme.fontStyle?.fontSize)
-          .onSizeChange((_: SizeOptions, newValue: SizeOptions) => {
-            const width: number = this.itemMaxWidth[index]
-            if (typeof newValue.width === 'number') {
-              if (!width) {
-                this.itemMaxWidth[index] = newValue.width + defaultHorPadding
-              } else {
-                if (newValue.width > width) {
-                  this.itemMaxWidth[index] = newValue.width + defaultHorPadding
-                }
-              }
-            }
-          })
-
+        TableInline({
+          tableCell: item,
+          itemMaxWidth: this.itemMaxWidth,
+          index: index,
+          theme: this.theme,
+          bold: true
+        })
 
         if (index != this.tokens.length - 1) {
           Divider().color(this.theme?.tableStyle?.driveColor)
@@ -142,6 +123,7 @@ export struct TableInline {
   @Param @Require tableCell: Tokens.TableCell
   @Param @Require itemMaxWidth: Map<number, number>
   @Param @Require theme: MarkdownTheme
+  @Param bold: boolean = false
   @Consumer() _mdInlineModifier?: AttributeModifier<TextAttribute>
   inlineTextController = new TextController()
 
@@ -165,6 +147,7 @@ export struct TableInline {
     Text(undefined, { controller: this.inlineTextController })
       .textAlign(textAlign(this.tableCell.align))
       .fontColor(this.theme?.fontStyle?.fontColor)
+      .fontWeight(this.bold ? FontWeight.Bold : FontWeight.Normal)
       .padding({
         top: 10,
         bottom: 10,

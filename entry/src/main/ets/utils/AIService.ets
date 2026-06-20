@@ -23,10 +23,12 @@ export type AgentActionType =
  */
 export interface AgentStep {
   action: AgentActionType;
-  anchor?: string;        // 用于定位的现有文本（replace/insert_before/insert_after/delete 需要）
-  endAnchor?: string;     // 可选：区间结束锚点。指定后操作范围 = anchor 起点 到 endAnchor 终点（用于删除/替换一整段）
-  occurrence?: number;    // 锚点第几次出现，1-based，默认 1；用于消除歧义
-  content?: string;       // 新文本（replace/insert_*/append/prepend 需要）
+  startLine?: number;     // 起始行号（1-based，含）；行号定位优先
+  endLine?: number;       // 结束行号（1-based，含）；省略时等于 startLine
+  anchor?: string;        // 兜底定位文本（行号失效时使用）
+  endAnchor?: string;     // 兜底：区间结束锚点
+  occurrence?: number;    // 锚点第几次出现，1-based，默认 1
+  content?: string;       // 新文本
   note?: string;          // 该步的简短说明
 }
 
@@ -126,9 +128,9 @@ You can directly edit the user's document. When the user asks you to modify, add
     "steps": [
       {
         "action": "replace" | "insert_before" | "insert_after" | "append" | "prepend" | "delete",
-        "anchor": "Exact existing text used to locate the edit (verbatim, copied from the document).",
-        "endAnchor": "Optional. The end of a RANGE. When set, the operation covers everything from 'anchor' to the end of 'endAnchor'.",
-        "occurrence": 1,
+        "startLine": 5,
+        "endLine": 8,
+        "anchor": "Optional fallback text used to locate the edit if line numbers drift.",
         "content": "The new text to write.",
         "note": "Short description of this single step."
       }
@@ -136,30 +138,36 @@ You can directly edit the user's document. When the user asks you to modify, add
   }
 }
 \`\`\`
-ACTION SEMANTICS (steps run in order, each applied to the result of the previous one):
-- "replace": find 'anchor' and replace it with 'content'. (anchor + content required)
-- "insert_after": find 'anchor' and insert 'content' right after it. (anchor + content required)
-- "insert_before": find 'anchor' and insert 'content' right before it. (anchor + content required)
-- "delete": find 'anchor' and remove it. (anchor required)
-- "append": add 'content' at the very end of the document. (content required, no anchor)
-- "prepend": add 'content' at the very beginning of the document. (content required, no anchor)
+ACTION SEMANTICS (steps run in order):
+- "replace": replace lines startLine..endLine with 'content'. (startLine + content required; endLine defaults to startLine)
+- "insert_after": insert 'content' as new line(s) right after line startLine. (startLine + content required)
+- "insert_before": insert 'content' as new line(s) right before line startLine. (startLine + content required)
+- "delete": delete lines startLine..endLine. (startLine required; endLine defaults to startLine)
+- "append": add 'content' at the very end of the document. (content required, no line numbers)
+- "prepend": add 'content' at the very beginning of the document. (content required, no line numbers)
 
-RULES:
-- 'anchor' MUST be text that exists VERBATIM in the current document. Copy it exactly.
-- Keep anchors SHORT and UNIQUE — prefer one distinctive line (e.g. a heading like "## 2. 文本样式") over a long multi-line block. Long blocks copied from memory often fail to match.
-- To delete or replace a WHOLE SECTION (e.g. an entire heading and everything under it), DO NOT paste the whole section as 'anchor'. Instead set 'anchor' to the section's first line and 'endAnchor' to the last line of that section (e.g. the start of the next heading or the section's final line). The operation then covers the entire range between them.
-- If an anchor appears multiple times, use 'occurrence' (1-based) to pick which one.
+LOCATING EDITS — READ CAREFULLY:
+- The document below is shown with line numbers in the form "  12→ text". These numbers are NOT part of the document; use them ONLY to locate edits.
+- ALWAYS prefer line numbers (startLine / endLine, 1-based, inclusive). To act on a single line, set startLine = endLine (or omit endLine).
+- To delete or replace a WHOLE SECTION (a heading and everything under it), set startLine to the heading's line and endLine to the last line of that section (the line just before the next heading, or the document's last line).
+- DO NOT copy long blocks of text. 'anchor' is only an optional safety fallback — a SHORT distinctive snippet from startLine; never paste whole paragraphs.
 - You may return MULTIPLE steps. Use real newline characters inside 'content'.
 
 If the user's request is just a normal question (not a document edit), reply normally in plain markdown text WITHOUT any JSON.`;
 
       if (currentContent) {
-        // #4 限制文档上下文长度，避免 token 溢出
+        // 文档按行加行号注入，供模型用行号精准定位
         const maxContentLen = 12000;
-        const truncated = currentContent.length > maxContentLen
-          ? currentContent.substring(0, maxContentLen) + '\n...(内容已截断)'
+        const clipped = currentContent.length > maxContentLen
+          ? currentContent.substring(0, maxContentLen)
           : currentContent;
-        injectedSystemPrompt += `\n\n[CURRENT DOCUMENT CONTENT]\n${truncated}`;
+        const lines = clipped.split('\n');
+        const numbered = lines.map((line: string, i: number): string => {
+          const ln = (i + 1).toString().padStart(4, ' ');
+          return `${ln}→ ${line}`;
+        }).join('\n');
+        const note = currentContent.length > maxContentLen ? '\n...(内容已截断)' : '';
+        injectedSystemPrompt += `\n\n[CURRENT DOCUMENT CONTENT — line numbers are for reference only, not part of the text]\n${numbered}${note}`;
       }
 
       const systemMsg: ChatMessage = { role: 'system', content: injectedSystemPrompt };
@@ -399,16 +407,18 @@ If the user's request is just a normal question (not a document edit), reply nor
     if (!s || !s.action) {
       return false;
     }
+    // 有行号即可定位
+    const hasLine: boolean = typeof s.startLine === 'number' && s.startLine > 0;
     switch (s.action) {
       case 'replace':
       case 'replace_content':
-        return !!s.anchor && s.content !== undefined;
+        return (hasLine || !!s.anchor) && s.content !== undefined;
       case 'insert_before':
       case 'insert_after':
-        return !!s.anchor && s.content !== undefined;
+        return (hasLine || !!s.anchor) && s.content !== undefined;
       case 'delete':
       case 'delete_content':
-        return !!s.anchor;
+        return hasLine || !!s.anchor;
       case 'append':
       case 'append_content':
       case 'prepend':

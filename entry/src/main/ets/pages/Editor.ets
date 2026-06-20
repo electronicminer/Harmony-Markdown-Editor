@@ -729,110 +729,75 @@ struct Editor {
   }
 
   /**
-   * 转义正则元字符
+   * 把 anchor 在文本中的字符下标转换成 0-based 行号；找不到返回 -1
    */
-  private escapeRegExp(s: string): string {
-    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  }
-
-  /**
-   * 把锚点编译成「空白宽松」正则源：连续空白(含换行) -> \s+，其余字符精确匹配
-   */
-  private toLooseSource(anchor: string): string {
-    const trimmed = anchor.trim();
-    // 按空白切分后逐段转义，再用 \s+ 连接
-    const parts = trimmed.split(/\s+/).filter((p): boolean => p.length > 0);
-    return parts.map((p): string => this.escapeRegExp(p)).join('\\s+');
-  }
-
-  /**
-   * 定位锚点在 text 中的范围（第 occurrence 次出现）。
-   * 三级回退：精确匹配 -> 空白宽松匹配 -> 首尾行范围匹配。
-   * 返回 { start, len }，未找到返回 { start: -1, len: 0 }。
-   */
-  private locateAnchor(text: string, anchor: string, occurrence: number): Record<string, number> {
-    const notFound: Record<string, number> = { 'start': -1, 'len': 0 };
+  private anchorToLine(lines: string[], anchor: string): number {
     if (!anchor) {
-      return notFound;
+      return -1;
     }
-    const nth = occurrence && occurrence > 0 ? occurrence : 1;
-
-    // 1) 精确匹配
-    let from = 0;
-    let idx = -1;
-    for (let i = 0; i < nth; i++) {
-      idx = text.indexOf(anchor, from);
-      if (idx === -1) {
-        break;
-      }
-      from = idx + anchor.length;
+    const firstLine = anchor.split('\n')[0].trim();
+    if (!firstLine) {
+      return -1;
     }
-    if (idx !== -1) {
-      return { 'start': idx, 'len': anchor.length };
-    }
-
-    // 2) 空白宽松匹配
-    try {
-      const loose = new RegExp(this.toLooseSource(anchor), 'g');
-      let m: RegExpExecArray | null = loose.exec(text);
-      let count = 0;
-      while (m !== null) {
-        count++;
-        if (count === nth) {
-          return { 'start': m.index, 'len': m[0].length };
-        }
-        if (m[0].length === 0) {
-          loose.lastIndex++;
-        }
-        m = loose.exec(text);
-      }
-      // 出现次数不足时退回第一处
-      if (count > 0) {
-        const first = new RegExp(this.toLooseSource(anchor)).exec(text);
-        if (first !== null) {
-          return { 'start': first.index, 'len': first[0].length };
-        }
-      }
-    } catch (e) {
-      // 正则构造失败则忽略，进入下一级
-    }
-
-    // 3) 首尾行范围匹配：用锚点的首个非空行与末个非空行框定整段
-    const lines = anchor.split('\n').map((l): string => l.trim()).filter((l): boolean => l.length > 0);
-    if (lines.length >= 2) {
-      const firstLine = lines[0];
-      const lastLine = lines[lines.length - 1];
-      const startIdx = text.indexOf(firstLine);
-      if (startIdx !== -1) {
-        const lastIdx = text.indexOf(lastLine, startIdx + firstLine.length);
-        if (lastIdx !== -1) {
-          const end = lastIdx + lastLine.length;
-          return { 'start': startIdx, 'len': end - startIdx };
-        }
+    // 先找完全相等的行
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].trim() === firstLine) {
+        return i;
       }
     }
-
-    return notFound;
+    // 再找包含关系
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].includes(firstLine) || firstLine.includes(lines[i].trim()) && lines[i].trim().length > 0) {
+        return i;
+      }
+    }
+    return -1;
   }
 
   /**
-   * 定位操作范围。无 endAnchor 时等同 locateAnchor；
-   * 有 endAnchor 时返回 [anchor 起点, endAnchor 终点] 的整段范围。
+   * 解析一个 step 的目标行范围 [start, end]（0-based，含）。
+   * 优先用 startLine/endLine，失效时回退 anchor / endAnchor。
+   * 返回 { start, end }，定位失败 start = -1。
    */
-  private locateRange(text: string, anchor: string, endAnchor: string, occurrence: number): Record<string, number> {
-    const start = this.locateAnchor(text, anchor, occurrence);
-    if (start.start === -1 || !endAnchor) {
-      return start;
+  private resolveLineRange(lines: string[], step: AgentStep): Record<string, number> {
+    const total = lines.length;
+    let start = -1;
+    let end = -1;
+
+    // 1) 行号定位
+    if (typeof step.startLine === 'number' && step.startLine > 0) {
+      start = step.startLine - 1; // 转 0-based
+      end = (typeof step.endLine === 'number' && step.endLine >= step.startLine)
+        ? step.endLine - 1
+        : start;
     }
-    // 在 anchor 之后查找 endAnchor
-    const afterStart = start.start + start.len;
-    const tail = text.substring(afterStart);
-    const endLoc = this.locateAnchor(tail, endAnchor, 1);
-    if (endLoc.start === -1) {
-      return start; // 找不到结束锚点，退化为只覆盖起始锚点
+
+    // 2) 行号无效或越界 -> 回退锚点
+    if (start < 0 || start >= total) {
+      const anchor = (step.anchor ?? '').replace(/\\n/g, '\n');
+      const aLine = this.anchorToLine(lines, anchor);
+      if (aLine !== -1) {
+        start = aLine;
+        const endAnchor = (step.endAnchor ?? '').replace(/\\n/g, '\n');
+        if (endAnchor) {
+          const eLine = this.anchorToLine(lines.slice(aLine), endAnchor);
+          end = eLine !== -1 ? aLine + eLine : aLine;
+        } else {
+          end = aLine;
+        }
+      }
     }
-    const end = afterStart + endLoc.start + endLoc.len;
-    return { 'start': start.start, 'len': end - start.start };
+
+    // 越界收敛
+    if (start !== -1) {
+      if (end < start) {
+        end = start;
+      }
+      if (end >= total) {
+        end = total - 1;
+      }
+    }
+    return { 'start': start, 'end': end };
   }
 
   handleApplyPlan(plan: AgentPlan) {
@@ -840,22 +805,37 @@ struct Editor {
       return;
     }
 
-    let currentText = this.markdownText;
+    let lines: string[] = this.markdownText.split('\n');
     let applied = 0;
     let failed = 0;
 
     for (const step of plan.steps) {
-      const anchor: string = (step.anchor ?? '').replace(/\\n/g, '\n');
-      const endAnchor: string = (step.endAnchor ?? '').replace(/\\n/g, '\n');
       const content: string = (step.content ?? '').replace(/\\n/g, '\n');
-      const occurrence: number = step.occurrence ?? 1;
+      const contentLines: string[] = content.split('\n');
 
       switch (step.action) {
+        case 'append':
+        case 'append_content':
+        case 'insert_content': {
+          // 文末追加
+          if (lines.length === 1 && lines[0] === '') {
+            lines = contentLines;
+          } else {
+            lines = lines.concat(contentLines);
+          }
+          applied++;
+          break;
+        }
+        case 'prepend': {
+          lines = contentLines.concat(lines);
+          applied++;
+          break;
+        }
         case 'replace':
         case 'replace_content': {
-          const loc = this.locateRange(currentText, anchor, endAnchor, occurrence);
-          if (loc.start !== -1) {
-            currentText = currentText.substring(0, loc.start) + content + currentText.substring(loc.start + loc.len);
+          const r = this.resolveLineRange(lines, step);
+          if (r.start !== -1) {
+            lines.splice(r.start, r.end - r.start + 1, ...contentLines);
             applied++;
           } else {
             failed++;
@@ -864,9 +844,9 @@ struct Editor {
         }
         case 'delete':
         case 'delete_content': {
-          const loc = this.locateRange(currentText, anchor, endAnchor, occurrence);
-          if (loc.start !== -1) {
-            currentText = currentText.substring(0, loc.start) + currentText.substring(loc.start + loc.len);
+          const r = this.resolveLineRange(lines, step);
+          if (r.start !== -1) {
+            lines.splice(r.start, r.end - r.start + 1);
             applied++;
           } else {
             failed++;
@@ -874,10 +854,9 @@ struct Editor {
           break;
         }
         case 'insert_after': {
-          const loc = this.locateAnchor(currentText, anchor, occurrence);
-          if (loc.start !== -1) {
-            const pos = loc.start + loc.len;
-            currentText = currentText.substring(0, pos) + content + currentText.substring(pos);
+          const r = this.resolveLineRange(lines, step);
+          if (r.start !== -1) {
+            lines.splice(r.end + 1, 0, ...contentLines);
             applied++;
           } else {
             failed++;
@@ -885,25 +864,13 @@ struct Editor {
           break;
         }
         case 'insert_before': {
-          const loc = this.locateAnchor(currentText, anchor, occurrence);
-          if (loc.start !== -1) {
-            currentText = currentText.substring(0, loc.start) + content + currentText.substring(loc.start);
+          const r = this.resolveLineRange(lines, step);
+          if (r.start !== -1) {
+            lines.splice(r.start, 0, ...contentLines);
             applied++;
           } else {
             failed++;
           }
-          break;
-        }
-        case 'append':
-        case 'append_content':
-        case 'insert_content': {
-          currentText = currentText.length > 0 ? currentText + '\n' + content : content;
-          applied++;
-          break;
-        }
-        case 'prepend': {
-          currentText = content + '\n' + currentText;
-          applied++;
           break;
         }
         default:
@@ -912,6 +879,7 @@ struct Editor {
       }
     }
 
+    const currentText = lines.join('\n');
     this.markdownText = currentText;
     this.recordHistory(currentText);
     this.updateCounts(currentText);
@@ -919,7 +887,7 @@ struct Editor {
     const total = plan.steps.length;
     const msg = failed === 0
       ? `已应用 ${applied}/${total} 项操作`
-      : `已应用 ${applied}/${total} 项，${failed} 项未找到锚点`;
+      : `已应用 ${applied}/${total} 项，${failed} 项定位失败`;
     promptAction.showToast({ message: msg, duration: 2000 });
   }
 
