@@ -10,7 +10,7 @@ import { marked } from '@lidary/markdown';
 import { PreferencesUtil } from '../utils/PreferencesUtil';
 import { AIConfig, AIConfigClass } from '../utils/AIConfig';
 import { AIChatPanel } from '../components/AIChatPanel';
-import { AgentPlan } from '../utils/AIService';
+import { AgentPlan, AgentStep } from '../utils/AIService';
 import { CloudDBService } from '../utils/CloudDBService';
 import { AuthService } from '../utils/AuthService';
 import { UserDocument } from '../models/UserDocument';
@@ -728,58 +728,199 @@ struct Editor {
     )
   }
 
-  handleApplyPlan(plan: AgentPlan) {
-    let currentText = this.markdownText;
-    
-    switch (plan.action) {
-      case 'replace_content':
-        if (plan.targetContent && plan.replacementContent !== undefined) {
-           // 确保处理可能的转义字符
-           const sanitizedTarget = plan.targetContent.replace(/\\n/g, '\n');
-           const sanitizedReplacement = plan.replacementContent.replace(/\\n/g, '\n');
-           
-           if (currentText.includes(sanitizedTarget)) {
-             currentText = currentText.replace(sanitizedTarget, sanitizedReplacement);
-             promptAction.showToast({ message: '已应用替换', duration: 1500 });
-           } else {
-             promptAction.showToast({ message: '未找到目标文本，可能已被修改', duration: 2000 });
-           }
-        }
-        break;
-      case 'delete_content':
-        if (plan.targetContent) {
-           const sanitizedTarget = plan.targetContent.replace(/\\n/g, '\n');
-           if (currentText.includes(sanitizedTarget)) {
-             currentText = currentText.replace(sanitizedTarget, '');
-             promptAction.showToast({ message: '已删除内容', duration: 1500 });
-           } else {
-             promptAction.showToast({ message: '未找到要删除的内容', duration: 2000 });
-           }
-        }
-        break;
-      case 'append_content':
-        if (plan.replacementContent) {
-           const sanitizedReplacement = plan.replacementContent.replace(/\\n/g, '\n');
-           currentText = currentText + '\n' + sanitizedReplacement;
-           promptAction.showToast({ message: '已追加内容', duration: 1500 });
-        }
-        break;
-      case 'insert_content':
-        if (plan.replacementContent) {
-           const sanitizedReplacement = plan.replacementContent.replace(/\\n/g, '\n');
-           // 默认在光标处插入
-           const start = this.selectionStart;
-           const before = currentText.substring(0, start);
-           const after = currentText.substring(start);
-           currentText = before + sanitizedReplacement + after;
-           promptAction.showToast({ message: '已插入内容', duration: 1500 });
-        }
-        break;
+  /**
+   * 转义正则元字符
+   */
+  private escapeRegExp(s: string): string {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  /**
+   * 把锚点编译成「空白宽松」正则源：连续空白(含换行) -> \s+，其余字符精确匹配
+   */
+  private toLooseSource(anchor: string): string {
+    const trimmed = anchor.trim();
+    // 按空白切分后逐段转义，再用 \s+ 连接
+    const parts = trimmed.split(/\s+/).filter((p): boolean => p.length > 0);
+    return parts.map((p): string => this.escapeRegExp(p)).join('\\s+');
+  }
+
+  /**
+   * 定位锚点在 text 中的范围（第 occurrence 次出现）。
+   * 三级回退：精确匹配 -> 空白宽松匹配 -> 首尾行范围匹配。
+   * 返回 { start, len }，未找到返回 { start: -1, len: 0 }。
+   */
+  private locateAnchor(text: string, anchor: string, occurrence: number): Record<string, number> {
+    const notFound: Record<string, number> = { 'start': -1, 'len': 0 };
+    if (!anchor) {
+      return notFound;
     }
-    
+    const nth = occurrence && occurrence > 0 ? occurrence : 1;
+
+    // 1) 精确匹配
+    let from = 0;
+    let idx = -1;
+    for (let i = 0; i < nth; i++) {
+      idx = text.indexOf(anchor, from);
+      if (idx === -1) {
+        break;
+      }
+      from = idx + anchor.length;
+    }
+    if (idx !== -1) {
+      return { 'start': idx, 'len': anchor.length };
+    }
+
+    // 2) 空白宽松匹配
+    try {
+      const loose = new RegExp(this.toLooseSource(anchor), 'g');
+      let m: RegExpExecArray | null = loose.exec(text);
+      let count = 0;
+      while (m !== null) {
+        count++;
+        if (count === nth) {
+          return { 'start': m.index, 'len': m[0].length };
+        }
+        if (m[0].length === 0) {
+          loose.lastIndex++;
+        }
+        m = loose.exec(text);
+      }
+      // 出现次数不足时退回第一处
+      if (count > 0) {
+        const first = new RegExp(this.toLooseSource(anchor)).exec(text);
+        if (first !== null) {
+          return { 'start': first.index, 'len': first[0].length };
+        }
+      }
+    } catch (e) {
+      // 正则构造失败则忽略，进入下一级
+    }
+
+    // 3) 首尾行范围匹配：用锚点的首个非空行与末个非空行框定整段
+    const lines = anchor.split('\n').map((l): string => l.trim()).filter((l): boolean => l.length > 0);
+    if (lines.length >= 2) {
+      const firstLine = lines[0];
+      const lastLine = lines[lines.length - 1];
+      const startIdx = text.indexOf(firstLine);
+      if (startIdx !== -1) {
+        const lastIdx = text.indexOf(lastLine, startIdx + firstLine.length);
+        if (lastIdx !== -1) {
+          const end = lastIdx + lastLine.length;
+          return { 'start': startIdx, 'len': end - startIdx };
+        }
+      }
+    }
+
+    return notFound;
+  }
+
+  /**
+   * 定位操作范围。无 endAnchor 时等同 locateAnchor；
+   * 有 endAnchor 时返回 [anchor 起点, endAnchor 终点] 的整段范围。
+   */
+  private locateRange(text: string, anchor: string, endAnchor: string, occurrence: number): Record<string, number> {
+    const start = this.locateAnchor(text, anchor, occurrence);
+    if (start.start === -1 || !endAnchor) {
+      return start;
+    }
+    // 在 anchor 之后查找 endAnchor
+    const afterStart = start.start + start.len;
+    const tail = text.substring(afterStart);
+    const endLoc = this.locateAnchor(tail, endAnchor, 1);
+    if (endLoc.start === -1) {
+      return start; // 找不到结束锚点，退化为只覆盖起始锚点
+    }
+    const end = afterStart + endLoc.start + endLoc.len;
+    return { 'start': start.start, 'len': end - start.start };
+  }
+
+  handleApplyPlan(plan: AgentPlan) {
+    if (!plan || !plan.steps || plan.steps.length === 0) {
+      return;
+    }
+
+    let currentText = this.markdownText;
+    let applied = 0;
+    let failed = 0;
+
+    for (const step of plan.steps) {
+      const anchor: string = (step.anchor ?? '').replace(/\\n/g, '\n');
+      const endAnchor: string = (step.endAnchor ?? '').replace(/\\n/g, '\n');
+      const content: string = (step.content ?? '').replace(/\\n/g, '\n');
+      const occurrence: number = step.occurrence ?? 1;
+
+      switch (step.action) {
+        case 'replace':
+        case 'replace_content': {
+          const loc = this.locateRange(currentText, anchor, endAnchor, occurrence);
+          if (loc.start !== -1) {
+            currentText = currentText.substring(0, loc.start) + content + currentText.substring(loc.start + loc.len);
+            applied++;
+          } else {
+            failed++;
+          }
+          break;
+        }
+        case 'delete':
+        case 'delete_content': {
+          const loc = this.locateRange(currentText, anchor, endAnchor, occurrence);
+          if (loc.start !== -1) {
+            currentText = currentText.substring(0, loc.start) + currentText.substring(loc.start + loc.len);
+            applied++;
+          } else {
+            failed++;
+          }
+          break;
+        }
+        case 'insert_after': {
+          const loc = this.locateAnchor(currentText, anchor, occurrence);
+          if (loc.start !== -1) {
+            const pos = loc.start + loc.len;
+            currentText = currentText.substring(0, pos) + content + currentText.substring(pos);
+            applied++;
+          } else {
+            failed++;
+          }
+          break;
+        }
+        case 'insert_before': {
+          const loc = this.locateAnchor(currentText, anchor, occurrence);
+          if (loc.start !== -1) {
+            currentText = currentText.substring(0, loc.start) + content + currentText.substring(loc.start);
+            applied++;
+          } else {
+            failed++;
+          }
+          break;
+        }
+        case 'append':
+        case 'append_content':
+        case 'insert_content': {
+          currentText = currentText.length > 0 ? currentText + '\n' + content : content;
+          applied++;
+          break;
+        }
+        case 'prepend': {
+          currentText = content + '\n' + currentText;
+          applied++;
+          break;
+        }
+        default:
+          failed++;
+          break;
+      }
+    }
+
     this.markdownText = currentText;
     this.recordHistory(currentText);
     this.updateCounts(currentText);
+
+    const total = plan.steps.length;
+    const msg = failed === 0
+      ? `已应用 ${applied}/${total} 项操作`
+      : `已应用 ${applied}/${total} 项，${failed} 项未找到锚点`;
+    promptAction.showToast({ message: msg, duration: 2000 });
   }
 
   build() {

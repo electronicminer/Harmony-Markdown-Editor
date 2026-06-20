@@ -1,4 +1,4 @@
-import { ChatMessage, AIService, AIResponse, AgentPlan } from '../utils/AIService';
+import { ChatMessage, AIService, AIResponse, AgentPlan, AgentStep } from '../utils/AIService';
 import { AIConfigClass, AIConfig } from '../utils/AIConfig';
 import { common } from '@kit.AbilityKit';
 import { promptAction } from '@kit.ArkUI';
@@ -143,6 +143,73 @@ export struct AIChatPanel {
     }];
   }
 
+  /**
+   * 操作类型对应的图标
+   */
+  stepIcon(action: string): string {
+    switch (action) {
+      case 'replace':
+      case 'replace_content':
+        return '✏️';
+      case 'insert_after':
+      case 'insert_before':
+      case 'insert_content':
+        return '➕';
+      case 'append':
+      case 'append_content':
+        return '⬇️';
+      case 'prepend':
+        return '⬆️';
+      case 'delete':
+      case 'delete_content':
+        return '🗑️';
+      default:
+        return '•';
+    }
+  }
+
+  /**
+   * 截断文本用于预览展示
+   */
+  truncate(text: string | undefined, max: number): string {
+    if (!text) {
+      return '';
+    }
+    const clean = text.replace(/\\n/g, ' ').replace(/\n/g, ' ');
+    return clean.length > max ? clean.substring(0, max) + '…' : clean;
+  }
+
+  /**
+   * 生成单步的可读摘要
+   */
+  stepSummary(step: AgentStep): string {
+    if (step.note && step.note.length > 0) {
+      return step.note;
+    }
+    switch (step.action) {
+      case 'replace':
+      case 'replace_content':
+        return `替换「${this.truncate(step.anchor, 16)}」→「${this.truncate(step.content, 16)}」`;
+      case 'insert_after':
+        return `在「${this.truncate(step.anchor, 16)}」之后插入`;
+      case 'insert_before':
+        return `在「${this.truncate(step.anchor, 16)}」之前插入`;
+      case 'append':
+      case 'append_content':
+      case 'insert_content':
+        return `在文末追加「${this.truncate(step.content, 20)}」`;
+      case 'prepend':
+        return `在文首插入「${this.truncate(step.content, 20)}」`;
+      case 'delete':
+      case 'delete_content':
+        return step.endAnchor
+          ? `删除整段：从「${this.truncate(step.anchor, 12)}」到「${this.truncate(step.endAnchor, 12)}」`
+          : `删除「${this.truncate(step.anchor, 20)}」`;
+      default:
+        return '未知操作';
+    }
+  }
+
   build() {
     Column() {
       // 头部
@@ -246,9 +313,28 @@ export struct AIChatPanel {
                 .fontSize(14)
                 .lineHeight(20)
                 .fontColor(this.isDark ? '#99FFFFFF' : '#99000000')
-                .margin({ bottom: 16 })
+                .margin({ bottom: 12 })
                 .width('100%')
-              
+
+              // 逐项操作预览
+              ForEach(this.pendingPlan.steps, (step: AgentStep, index: number) => {
+                Row({ space: 8 }) {
+                  Text(this.stepIcon(step.action))
+                    .fontSize(14)
+                  Text(`${index + 1}. ${this.stepSummary(step)}`)
+                    .fontSize(13)
+                    .lineHeight(18)
+                    .layoutWeight(1)
+                    .fontColor(this.isDark ? '#CCFFFFFF' : '#CC000000')
+                }
+                .width('100%')
+                .alignItems(VerticalAlign.Top)
+                .padding({ top: 6, bottom: 6, left: 10, right: 10 })
+                .margin({ bottom: 6 })
+                .backgroundColor(this.isDark ? '#1AFFFFFF' : '#08000000')
+                .borderRadius(10)
+              })
+
               Row({ space: 12 }) {
                 Button('拒绝')
                   .fontSize(14)
