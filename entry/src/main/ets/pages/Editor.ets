@@ -19,6 +19,116 @@ import Long from 'long';
 // 自动补全功能导入（已注释）
 // import { CompletionItem, filterCompletions, checkTrigger, TriggerInfo, CompletionItemType } from '../utils/MarkdownCompletions';
 
+// #1 退出未保存确认对话框（风格对齐 ShareDialog）
+@CustomDialog
+struct ExitConfirmDialog {
+  controller: CustomDialogController;
+  isDark: boolean = false;
+  onSaveAndExit: () => void = () => {};
+  onDiscardAndExit: () => void = () => {};
+
+  build() {
+    Column({ space: 16 }) {
+      Text('未保存的更改')
+        .fontSize(22)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(this.isDark ? '#E5FFFFFF' : '#E5000000')
+      Text('当前文档有未保存的更改，是否保存后再退出？')
+        .fontSize(14)
+        .fontColor(this.isDark ? '#99FFFFFF' : '#99000000')
+        .lineHeight(22)
+      Row({ space: 12 }) {
+        Button('取消')
+          .fontSize(15)
+          .fontColor(this.isDark ? '#E5FFFFFF' : '#E5000000')
+          .backgroundColor(this.isDark ? '#33FFFFFF' : '#0D000000')
+          .type(ButtonType.Capsule)
+          .height(44)
+          .layoutWeight(1)
+          .onClick(() => this.controller.close())
+        Button('不保存')
+          .fontSize(15)
+          .fontColor(Color.White)
+          .backgroundColor('#F4222D')
+          .type(ButtonType.Capsule)
+          .height(44)
+          .layoutWeight(1)
+          .shadow({ radius: 12, color: 'rgba(244,34,45,0.3)', offsetY: 4 })
+          .onClick(() => {
+            this.controller.close();
+            this.onDiscardAndExit();
+          })
+        Button('保存并退出')
+          .fontSize(15)
+          .fontColor(Color.White)
+          .backgroundColor('#0A59F7')
+          .type(ButtonType.Capsule)
+          .height(44)
+          .layoutWeight(1)
+          .shadow({ radius: 12, color: 'rgba(10,89,247,0.3)', offsetY: 4 })
+          .onClick(() => {
+            this.controller.close();
+            this.onSaveAndExit();
+          })
+      }
+      .width('100%')
+    }
+    .width('90%')
+    .padding(24)
+    .borderRadius(32)
+    .backgroundColor(this.isDark ? 'rgba(36,36,36,0.95)' : 'rgba(240, 244, 255, 0.95)')
+    .backdropBlur(80)
+  }
+}
+
+// #10 未登录上传引导登录对话框（风格对齐 ShareDialog）
+@CustomDialog
+struct LoginPromptDialog {
+  controller: CustomDialogController;
+  isDark: boolean = false;
+
+  build() {
+    Column({ space: 16 }) {
+      Text('需要登录')
+        .fontSize(22)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(this.isDark ? '#E5FFFFFF' : '#E5000000')
+      Text('上传到云端需要先登录账号，是否前往登录？')
+        .fontSize(14)
+        .fontColor(this.isDark ? '#99FFFFFF' : '#99000000')
+        .lineHeight(22)
+      Row({ space: 12 }) {
+        Button('取消')
+          .fontSize(15)
+          .fontColor(this.isDark ? '#E5FFFFFF' : '#E5000000')
+          .backgroundColor(this.isDark ? '#33FFFFFF' : '#0D000000')
+          .type(ButtonType.Capsule)
+          .height(44)
+          .layoutWeight(1)
+          .onClick(() => this.controller.close())
+        Button('去登录')
+          .fontSize(15)
+          .fontColor(Color.White)
+          .backgroundColor('#0A59F7')
+          .type(ButtonType.Capsule)
+          .height(44)
+          .layoutWeight(1)
+          .shadow({ radius: 12, color: 'rgba(10,89,247,0.3)', offsetY: 4 })
+          .onClick(() => {
+            this.controller.close();
+            router.pushUrl({ url: 'pages/RegisterPage' });
+          })
+      }
+      .width('100%')
+    }
+    .width('90%')
+    .padding(24)
+    .borderRadius(32)
+    .backgroundColor(this.isDark ? 'rgba(36,36,36,0.95)' : 'rgba(240, 244, 255, 0.95)')
+    .backdropBlur(80)
+  }
+}
+
 @Entry
 @Component
 struct Editor {
@@ -37,6 +147,7 @@ struct Editor {
   @State autoSave: boolean = false
   @State autoSaveInterval: number = 60
   @State viewMode: number = 0 // 0: Split, 1: Edit Only, 2: Preview Only
+  @State hasUnsavedChanges: boolean = false // #1 dirty flag
   @State followSystem: boolean = false
   @StorageProp('currentColorMode') @Watch('onSystemModeChange') currentSystemMode: number = ConfigurationConstant.ColorMode.COLOR_MODE_LIGHT
   private autoSaveTimer: number = -1;
@@ -45,6 +156,10 @@ struct Editor {
   @State editorWeight: number = 1
   @State previewWeight: number = 1
   @State aiWeight: number = 1
+  // #7 拖拽起始快照
+  private dragStartEditorWeight: number = 1
+  private dragStartPreviewWeight: number = 1
+  private dragStartAiWeight: number = 1
 
   // 撤销/重做历史
   private undoStack: string[] = []
@@ -67,6 +182,33 @@ struct Editor {
       doc: this.cloudDocForShare,
       isDark: this.isDark,
       onRefresh: () => {}
+    }),
+    autoCancel: true,
+    alignment: DialogAlignment.Center,
+    customStyle: true
+  });
+
+  // #1 退出确认对话框控制器
+  private exitConfirmController: CustomDialogController = new CustomDialogController({
+    builder: ExitConfirmDialog({
+      isDark: this.isDark,
+      onSaveAndExit: () => {
+        this.saveDocument(true);
+        router.back();
+      },
+      onDiscardAndExit: () => {
+        router.back();
+      }
+    }),
+    autoCancel: true,
+    alignment: DialogAlignment.Center,
+    customStyle: true
+  });
+
+  // #10 登录提示对话框控制器
+  private loginPromptController: CustomDialogController = new CustomDialogController({
+    builder: LoginPromptDialog({
+      isDark: this.isDark
     }),
     autoCancel: true,
     alignment: DialogAlignment.Center,
@@ -200,9 +342,26 @@ struct Editor {
   }
 
   aboutToDisappear() {
+    // #6 清理所有定时器
+    if (this.typingTimer !== -1) {
+      clearTimeout(this.typingTimer);
+      this.typingTimer = -1;
+    }
     if (this.autoSaveTimer !== -1) {
       clearInterval(this.autoSaveTimer);
       this.autoSaveTimer = -1;
+    }
+  }
+
+  // #9 onPageHide 时刷新待保存内容
+  onPageHide(): void {
+    if (this.typingTimer !== -1) {
+      clearTimeout(this.typingTimer);
+      this.typingTimer = -1;
+      // 如果有未保存更改，立即刷新
+      if (this.hasUnsavedChanges && this.autoSave) {
+        this.performAutoSave();
+      }
     }
   }
 
@@ -218,12 +377,16 @@ struct Editor {
     }
   }
 
-  performAutoSave() {
+  async performAutoSave(): Promise<void> {
     if (this.fileUri) {
       try {
-        const file = fs.openSync(this.fileUri, fs.OpenMode.READ_WRITE | fs.OpenMode.TRUNC);
+        // #3 原子写：先写临时文件，再 rename
+        const tmpUri = this.fileUri + '.tmp';
+        const file = fs.openSync(tmpUri, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
         fs.writeSync(file.fd, this.markdownText);
         fs.closeSync(file);
+        fs.renameSync(tmpUri, this.fileUri);
+        this.hasUnsavedChanges = false;
         console.info('Auto saved to uri');
       } catch (e) {
         console.error('Auto save failed', e);
@@ -319,20 +482,31 @@ struct Editor {
   }
 
   onBackPress(): boolean | void {
-    this.saveDocument();
+    // #1 退出未保存确认
+    if (this.hasUnsavedChanges) {
+      this.exitConfirmController.open();
+      return true; // 阻止默认返回行为
+    }
+    this.saveDocument(true);
     return false;
   }
 
+  // #1, #3 原子写保存文档（本地内部存储）
   saveDocument(silent: boolean = false) {
     try {
       const context = getContext(this) as common.UIAbilityContext;
       const filesDir = context.filesDir;
       const filePath = filesDir + '/' + this.fileName;
-      
-      const file = fs.openSync(filePath, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
+      const tmpPath = filePath + '.tmp';
+
+      // #3 原子写：先写临时文件，再 rename
+      const file = fs.openSync(tmpPath, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
       fs.writeSync(file.fd, this.markdownText);
       fs.closeSync(file);
-      
+      fs.renameSync(tmpPath, filePath);
+
+      this.hasUnsavedChanges = false; // #1 reset dirty flag
+
       if (!silent) {
         promptAction.showToast({
           message: '已保存',
@@ -366,9 +540,14 @@ struct Editor {
         }
       }
 
-      const file = fs.openSync(uri, fs.OpenMode.READ_WRITE | fs.OpenMode.TRUNC);
+      // #3 原子写：先写临时文件，再 rename
+      const tmpUri = uri + '.tmp';
+      const file = fs.openSync(tmpUri, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
       fs.writeSync(file.fd, this.markdownText);
       fs.closeSync(file);
+      fs.renameSync(tmpUri, uri);
+
+      this.hasUnsavedChanges = false; // #1 reset dirty flag
 
       promptAction.showToast({
         message: '保存成功',
@@ -384,15 +563,17 @@ struct Editor {
   }
 
   async cloudSave(): Promise<void> {
+    // #11 提前置位防抖标志，避免 double-click 穿透
     if (this.isCloudSyncing) return;
+    this.isCloudSyncing = true;
 
     const user = await AuthService.getCurrentUser();
     if (!user) {
-      promptAction.showToast({ message: '请先登录后再上传到云端', duration: 2000 });
+      this.isCloudSyncing = false;
+      // #10 未登录上传引导登录 dialog
+      this.loginPromptController.open();
       return;
     }
-
-    this.isCloudSyncing = true;
 
     // 如果有本地文件但 cloudDocId 还是空的，立即从持久化映射中恢复
     if (!this.cloudDocId && this.fileUri) {
@@ -524,7 +705,7 @@ struct Editor {
   }
 
   @Builder
-  DividerBar(onDrag: (offset: number) => void) {
+  DividerBar(onDragStart: () => void, onDrag: (offset: number) => void) {
     Stack() {
        Column()
          .width(4)
@@ -537,6 +718,10 @@ struct Editor {
     .backgroundColor('transparent')
     .gesture(
       PanGesture({ direction: PanDirection.Horizontal })
+        .onActionStart((_event) => {
+          // #7 拖拽开始时记录初始权重值
+          onDragStart();
+        })
         .onActionUpdate((event) => {
           onDrag(event.offsetX)
         })
@@ -615,12 +800,17 @@ struct Editor {
                 if (this.markdownText !== value) {
                   this.markdownText = value
                   this.updateCounts(value)
+                  this.hasUnsavedChanges = true // #1 dirty flag
 
                   if (this.typingTimer !== -1) {
                     clearTimeout(this.typingTimer)
                   }
                   this.typingTimer = setTimeout(() => {
                     this.recordHistory(value)
+                    // #9 自动保存防抖兜底：800ms 无输入后触发静默保存
+                    if (this.autoSave) {
+                      this.performAutoSave();
+                    }
                   }, 800)
 
                   // 自动补全逻辑已禁用
@@ -650,14 +840,17 @@ struct Editor {
           .clip(true)
         }
 
-        // 第一道 分隔线（仅在分屏或分屏预览时显示）
+        // 第一道 分隔线（仅在分屏时显示）
         if (this.viewMode === 0) {
-          this.DividerBar( (offset) => {
-            // 根据拖拽调整权重
-            const totalWeight = this.editorWeight + this.previewWeight;
-            // 简单处理：向右拖拽 -> editor 增加，preview 减小
+          this.DividerBar(() => {
+            // #7 记录拖拽起始快照
+            this.dragStartEditorWeight = this.editorWeight;
+            this.dragStartPreviewWeight = this.previewWeight;
+          }, (offset) => {
+            // 根据拖拽调整权重（基于起始值）
+            const totalWeight = this.dragStartEditorWeight + this.dragStartPreviewWeight;
             const delta = offset / 1000;
-            this.editorWeight = Math.max(0.2, this.editorWeight + delta * totalWeight);
+            this.editorWeight = Math.max(0.2, this.dragStartEditorWeight + delta * totalWeight);
             this.previewWeight = Math.max(0.2, totalWeight - this.editorWeight);
           })
         }
@@ -701,26 +894,31 @@ struct Editor {
 
         // 第二道 分隔线（仅在启用了 AI 时显示）
         if (this.aiEnabled) {
-          this.DividerBar( (offset) => {
-            // 根据拖拽调整权重
-            const totalWeight = (this.viewMode === 1 ? this.editorWeight : (this.viewMode === 2 ? this.previewWeight : this.editorWeight + this.previewWeight)) + this.aiWeight;
+          this.DividerBar(() => {
+            // #7 记录拖拽起始快照
+            this.dragStartEditorWeight = this.editorWeight;
+            this.dragStartPreviewWeight = this.previewWeight;
+            this.dragStartAiWeight = this.aiWeight;
+          }, (offset) => {
+            // 根据拖拽调整权重（基于起始值）
+            const totalWeight = (this.viewMode === 1 ? this.dragStartEditorWeight : (this.viewMode === 2 ? this.dragStartPreviewWeight : this.dragStartEditorWeight + this.dragStartPreviewWeight)) + this.dragStartAiWeight;
             const delta = offset / 1000;
-            
+
             // 如果是在分屏状态下拖动，我们保持左侧两栏的相对比例，缩小它们并放大 AI 面板
              if (this.viewMode === 0) {
-               const leftPanelTotal = this.editorWeight + this.previewWeight;
+               const leftPanelTotal = this.dragStartEditorWeight + this.dragStartPreviewWeight;
                const newLeftTotal = Math.max(0.2, leftPanelTotal + delta * totalWeight);
                this.aiWeight = Math.max(0.2, totalWeight - newLeftTotal);
-               
+
                // 按原比例分配剩下的空间
-               const ratio = this.editorWeight / leftPanelTotal;
+               const ratio = this.dragStartEditorWeight / leftPanelTotal;
                this.editorWeight = newLeftTotal * ratio;
                this.previewWeight = newLeftTotal * (1 - ratio);
              } else if (this.viewMode === 1) {
-                this.editorWeight = Math.max(0.2, this.editorWeight + delta * totalWeight);
+                this.editorWeight = Math.max(0.2, this.dragStartEditorWeight + delta * totalWeight);
                 this.aiWeight = Math.max(0.2, totalWeight - this.editorWeight);
              } else {
-                this.previewWeight = Math.max(0.2, this.previewWeight + delta * totalWeight);
+                this.previewWeight = Math.max(0.2, this.dragStartPreviewWeight + delta * totalWeight);
                 this.aiWeight = Math.max(0.2, totalWeight - this.previewWeight);
              }
           })
@@ -847,9 +1045,43 @@ struct Editor {
                 });
               }
             })
-            this.GlassIconButton(this.viewMode === 0 ? '🌗' : (this.viewMode === 1 ? '✏️' : '👁️'), () => {
-              this.viewMode = (this.viewMode + 1) % 3
-            })
+            // #14 视图模式分段控件 — 玻璃胶囊风格，融入工具栏
+            Row({ space: 0 }) {
+              Button('编辑')
+                .fontSize(13)
+                .fontWeight(FontWeight.Medium)
+                .height(32)
+                .padding({ left: 14, right: 14 })
+                .fontColor(this.viewMode === 1 ? Color.White : (this.isDark ? '#99FFFFFF' : '#99000000'))
+                .backgroundColor(this.viewMode === 1 ? '#0A59F7' : 'transparent')
+                .borderRadius(20)
+                .onClick(() => { this.viewMode = 1; })
+                .animation({ duration: 200, curve: Curve.EaseInOut })
+              Button('分屏')
+                .fontSize(13)
+                .fontWeight(FontWeight.Medium)
+                .height(32)
+                .padding({ left: 14, right: 14 })
+                .fontColor(this.viewMode === 0 ? Color.White : (this.isDark ? '#99FFFFFF' : '#99000000'))
+                .backgroundColor(this.viewMode === 0 ? '#0A59F7' : 'transparent')
+                .borderRadius(20)
+                .onClick(() => { this.viewMode = 0; })
+                .animation({ duration: 200, curve: Curve.EaseInOut })
+              Button('预览')
+                .fontSize(13)
+                .fontWeight(FontWeight.Medium)
+                .height(32)
+                .padding({ left: 14, right: 14 })
+                .fontColor(this.viewMode === 2 ? Color.White : (this.isDark ? '#99FFFFFF' : '#99000000'))
+                .backgroundColor(this.viewMode === 2 ? '#0A59F7' : 'transparent')
+                .borderRadius(20)
+                .onClick(() => { this.viewMode = 2; })
+                .animation({ duration: 200, curve: Curve.EaseInOut })
+            }
+            .padding(2)
+            .borderRadius(22)
+            .backgroundColor(this.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)')
+            .backdropBlur(50)
             this.GlassIconButton('💾', () => {
               this.saveFile()
             })

@@ -87,12 +87,12 @@ export struct AIChatPanel {
     this.isLoading = true;
 
     try {
-      // 添加上下文信息
+      // #4 移除 AIChatPanel 侧的内容注入，统一由 AIService.chat() 在系统提示中注入（已限长）
       const messagesWithContext: ChatMessage[] = [
         ...this.messages.filter(m => m.role !== 'system'),
         {
           role: 'user',
-          content: currentInput + (this.currentContent ? '\n\n当前编辑内容：\n' + this.currentContent.substring(0, 500) : '')
+          content: currentInput
         }
       ];
 

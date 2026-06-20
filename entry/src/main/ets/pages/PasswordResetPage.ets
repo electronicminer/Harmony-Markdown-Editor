@@ -13,6 +13,8 @@ struct PasswordResetPage {
   @State countdown: number = 0;
 
   private countdownTimer: number = -1;
+  // #6 导航定时器引用
+  private navigateTimer: number = -1;
 
   aboutToAppear(): void {
     this.loadUserEmail();
@@ -20,6 +22,11 @@ struct PasswordResetPage {
 
   aboutToDisappear(): void {
     this.stopCountdown();
+    // #6 清理未触发的导航 setTimeout
+    if (this.navigateTimer !== -1) {
+      clearTimeout(this.navigateTimer);
+      this.navigateTimer = -1;
+    }
   }
 
   async loadUserEmail(): Promise<void> {
@@ -92,7 +99,11 @@ struct PasswordResetPage {
 
     if (result.success) {
       promptAction.showToast({ message: result.message, duration: 1500 });
-      setTimeout(() => router.back(), 1500);
+      // #6 保存定时器引用，以便 aboutToDisappear 时清理
+      this.navigateTimer = setTimeout(() => {
+        this.navigateTimer = -1;
+        router.back();
+      }, 1500);
     } else {
       promptAction.showToast({ message: result.message, duration: 2000 });
     }

@@ -165,7 +165,7 @@ export class CloudDBService {
     } catch (e) {
       const msg = CloudDBService.getErrorMessage(e);
       console.error('[CloudDB] 保存失败:', msg);
-      CloudDBService.switchToDemoMode(msg, e);
+      // #5 单次回退到 demo，不永久污染 isDemoMode
       return CloudDBService.demoSave(doc, isNew);
     }
   }
@@ -211,7 +211,7 @@ export class CloudDBService {
       const snapshot = await CloudDBService.dbZone!.executeQuery(query);
       return snapshot.getSnapshotObjects();
     } catch (e) {
-      CloudDBService.switchToDemoMode(CloudDBService.getErrorMessage(e), e);
+      // #5 单次回退到 demo，不永久污染 isDemoMode
       return CloudDBService.demoGetMyDocs(user.uid);
     }
   }
@@ -245,7 +245,7 @@ export class CloudDBService {
       const snapshot = await CloudDBService.dbZone!.executeQuery(query);
       return snapshot.getSnapshotObjects().filter(doc => doc.isSharedWithUser(user.email));
     } catch (e) {
-      CloudDBService.switchToDemoMode(CloudDBService.getErrorMessage(e), e);
+      // #5 单次回退到 demo，不永久污染 isDemoMode
       return CloudDBService.demoGetSharedWithMe(user.uid, user.email);
     }
   }
@@ -276,7 +276,7 @@ export class CloudDBService {
       const docs = snapshot.getSnapshotObjects();
       return docs.length > 0 ? docs[0] : null;
     } catch (e) {
-      CloudDBService.switchToDemoMode(CloudDBService.getErrorMessage(e), e);
+      // #5 单次回退到 demo，不永久污染 isDemoMode
       return CloudDBService.demoGetById(id);
     }
   }
@@ -308,7 +308,7 @@ export class CloudDBService {
       await CloudDBService.dbZone!.executeDelete(doc);
       return { success: true, message: '已从云端删除' };
     } catch (e) {
-      CloudDBService.switchToDemoMode(CloudDBService.getErrorMessage(e), e);
+      // #5 单次回退到 demo，不永久污染 isDemoMode
       return CloudDBService.demoDelete(doc);
     }
   }

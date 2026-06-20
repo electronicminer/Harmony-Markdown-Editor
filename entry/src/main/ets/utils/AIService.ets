@@ -114,7 +114,12 @@ CRITICAL ACTION RULES:
 If the user's request is just a normal question, you can reply normally in markdown text format. But if they instruct you to change the text, you must return JSON.`;
 
       if (currentContent) {
-        injectedSystemPrompt += `\n\n[CURRENT DOCUMENT CONTENT]\n${currentContent}`;
+        // #4 限制文档上下文长度，避免 token 溢出
+        const maxContentLen = 4000;
+        const truncated = currentContent.length > maxContentLen
+          ? currentContent.substring(0, maxContentLen) + '\n...(内容已截断)'
+          : currentContent;
+        injectedSystemPrompt += `\n\n[CURRENT DOCUMENT CONTENT]\n${truncated}`;
       }
 
       const systemMsg: ChatMessage = { role: 'system', content: injectedSystemPrompt };
@@ -128,22 +133,26 @@ If the user's request is just a normal question, you can reply normally in markd
       };
 
       const httpRequest = http.createHttp();
-      
-      const response = await httpRequest.request(
-        config.apiUrl,
-        {
-          method: http.RequestMethod.POST,
-          header: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${config.apiKey}`
-          },
-          extraData: JSON.stringify(requestBody),
-          connectTimeout: AIService.REQUEST_TIMEOUT,
-          readTimeout: AIService.REQUEST_TIMEOUT
-        }
-      );
 
-      httpRequest.destroy();
+      let response: http.HttpResponse;
+      try {
+        response = await httpRequest.request(
+          config.apiUrl,
+          {
+            method: http.RequestMethod.POST,
+            header: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${config.apiKey}`
+            },
+            extraData: JSON.stringify(requestBody),
+            connectTimeout: AIService.REQUEST_TIMEOUT,
+            readTimeout: AIService.REQUEST_TIMEOUT
+          }
+        );
+      } finally {
+        // #2 确保 HTTP 句柄在任何异常路径都被释放
+        httpRequest.destroy();
+      }
 
       if (response.responseCode === 200) {
         const resultStr: string = response.result as string;

@@ -5,6 +5,56 @@ import { CloudDBService } from '../utils/CloudDBService';
 import { UserDocument } from '../models/UserDocument';
 import { ShareDialog } from '../components/ShareDialog';
 
+// #8 删除确认对话框（风格对齐 ShareDialog）
+@CustomDialog
+struct DeleteConfirmDialog {
+  controller: CustomDialogController;
+  isDark: boolean = false;
+  docTitle: string = '';
+  onConfirmDelete: () => void = () => {};
+
+  build() {
+    Column({ space: 16 }) {
+      Text('确认删除')
+        .fontSize(22)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(this.isDark ? '#E5FFFFFF' : '#E5000000')
+      Text(`确定要删除文档「${this.docTitle}」吗？此操作不可撤销。`)
+        .fontSize(14)
+        .fontColor(this.isDark ? '#99FFFFFF' : '#99000000')
+        .lineHeight(22)
+      Row({ space: 12 }) {
+        Button('取消')
+          .fontSize(15)
+          .fontColor(this.isDark ? '#E5FFFFFF' : '#E5000000')
+          .backgroundColor(this.isDark ? '#33FFFFFF' : '#0D000000')
+          .type(ButtonType.Capsule)
+          .height(44)
+          .layoutWeight(1)
+          .onClick(() => this.controller.close())
+        Button('删除')
+          .fontSize(15)
+          .fontColor(Color.White)
+          .backgroundColor('#F4222D')
+          .type(ButtonType.Capsule)
+          .height(44)
+          .layoutWeight(1)
+          .shadow({ radius: 12, color: 'rgba(244,34,45,0.3)', offsetY: 4 })
+          .onClick(() => {
+            this.controller.close();
+            this.onConfirmDelete();
+          })
+      }
+      .width('100%')
+    }
+    .width('90%')
+    .padding(24)
+    .borderRadius(32)
+    .backgroundColor(this.isDark ? 'rgba(36,36,36,0.95)' : 'rgba(240, 244, 255, 0.95)')
+    .backdropBlur(80)
+  }
+}
+
 @Entry
 @Component
 struct CloudDocsPage {
@@ -18,12 +68,31 @@ struct CloudDocsPage {
   @State isDark: boolean = false;
   @State isCloudConnected: boolean = false;
   @State selectedDoc: UserDocument = new UserDocument();
+  // #8 删除目标文档（在打开确认对话框前设置）
+  @State deleteTargetDoc: UserDocument = new UserDocument();
 
   private shareDialogController: CustomDialogController = new CustomDialogController({
     builder: ShareDialog({
       doc: this.selectedDoc,
       isDark: this.isDark,
       onRefresh: () => { this.loadDocuments(); }
+    }),
+    autoCancel: true,
+    alignment: DialogAlignment.Center,
+    customStyle: true
+  });
+
+  // #8 删除确认对话框标题（在打开前设置）
+  @State deleteTargetTitle: string = '';
+
+  // #8 删除确认对话框控制器
+  private deleteConfirmController: CustomDialogController = new CustomDialogController({
+    builder: DeleteConfirmDialog({
+      isDark: this.isDark,
+      docTitle: this.deleteTargetTitle,
+      onConfirmDelete: () => {
+        this.deleteDocument(this.deleteTargetDoc);
+      }
     }),
     autoCancel: true,
     alignment: DialogAlignment.Center,
@@ -115,6 +184,13 @@ struct CloudDocsPage {
       url: 'pages/Editor',
       params: { content: doc.content, cloudDocId: doc.id, isDark: this.isDark }
     });
+  }
+
+  // #8 删除文档添加二次确认（CustomDialogController）
+  confirmDeleteDocument(doc: UserDocument): void {
+    this.deleteTargetDoc = doc;
+    this.deleteTargetTitle = doc.getDisplayTitle();
+    this.deleteConfirmController.open();
   }
 
   async deleteDocument(doc: UserDocument): Promise<void> {
@@ -212,7 +288,7 @@ struct CloudDocsPage {
             .type(ButtonType.Capsule)
             .height(32)
             .layoutWeight(1)
-            .onClick(() => this.deleteDocument(doc))
+            .onClick(() => this.confirmDeleteDocument(doc))
         }
       }
       .width('100%')

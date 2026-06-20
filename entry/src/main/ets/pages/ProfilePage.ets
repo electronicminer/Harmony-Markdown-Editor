@@ -21,9 +21,19 @@ struct ProfilePage {
   @State bioMaxLength: number = 100;
 
   private context = getContext(this) as common.UIAbilityContext;
+  // #6 定时器引用，用于 aboutToDisappear 清理
+  private navigateTimer: number = -1;
 
   aboutToAppear(): void {
     this.loadProfile();
+  }
+
+  aboutToDisappear(): void {
+    // #6 清理未触发的 setTimeout
+    if (this.navigateTimer !== -1) {
+      clearTimeout(this.navigateTimer);
+      this.navigateTimer = -1;
+    }
   }
 
   async loadProfile(): Promise<void> {
@@ -48,7 +58,11 @@ struct ProfilePage {
       await PreferencesUtil.saveProfileBio(this.context, this.bio.trim());
       await PreferencesUtil.saveProfileAvatarColor(this.context, this.avatarColor);
       promptAction.showToast({ message: '个人资料已保存', duration: 1500 });
-      setTimeout(() => router.back(), 1500);
+      // #6 保存定时器引用，以便 aboutToDisappear 时清理
+      this.navigateTimer = setTimeout(() => {
+        this.navigateTimer = -1;
+        router.back();
+      }, 1500);
     } catch (e) {
       promptAction.showToast({ message: '保存失败，请重试', duration: 2000 });
     }
