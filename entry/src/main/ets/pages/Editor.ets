@@ -148,6 +148,7 @@ struct Editor {
   @State autoSaveInterval: number = 60
   @State viewMode: number = 0 // 0: Split, 1: Edit Only, 2: Preview Only
   @State hasUnsavedChanges: boolean = false // #1 dirty flag
+  @State saveStatus: string = '' // 保存状态指示文本，如「已自动保存 14:30」
   @State followSystem: boolean = false
   @StorageProp('currentColorMode') @Watch('onSystemModeChange') currentSystemMode: number = ConfigurationConstant.ColorMode.COLOR_MODE_LIGHT
   private autoSaveTimer: number = -1;
@@ -321,6 +322,7 @@ struct Editor {
       this.markdownText = previous
       this.updateCounts(previous)
       this.updateHistoryState()
+      this.hasUnsavedChanges = true
     }
   }
 
@@ -331,6 +333,7 @@ struct Editor {
         this.undoStack.push(next)
         this.markdownText = next
         this.updateCounts(next)
+        this.hasUnsavedChanges = true
       }
       this.updateHistoryState()
     }
@@ -377,22 +380,32 @@ struct Editor {
     }
   }
 
+  /**
+   * 生成「HH:mm:ss」时间串，用于保存状态提示
+   */
+  private nowTimeStr(): string {
+    const d = new Date();
+    const p = (n: number): string => n < 10 ? '0' + n : '' + n;
+    return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  }
+
   async performAutoSave(): Promise<void> {
     if (this.fileUri) {
       try {
-        // #3 原子写：先写临时文件，再 rename
-        const tmpUri = this.fileUri + '.tmp';
-        const file = fs.openSync(tmpUri, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
+        // 外部 URI 直接写入，不能拼 '.tmp' 再 rename（未授权会失败）
+        const file = fs.openSync(this.fileUri, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
         fs.writeSync(file.fd, this.markdownText);
         fs.closeSync(file);
-        fs.renameSync(tmpUri, this.fileUri);
         this.hasUnsavedChanges = false;
+        this.saveStatus = `已自动保存 ${this.nowTimeStr()}`;
         console.info('Auto saved to uri');
       } catch (e) {
+        this.saveStatus = '自动保存失败';
         console.error('Auto save failed', e);
       }
     } else {
       this.saveDocument(true);
+      this.saveStatus = `已自动保存 ${this.nowTimeStr()}`;
     }
   }
 
@@ -447,6 +460,7 @@ struct Editor {
     this.markdownText = newText;
     this.recordHistory(newText);
     this.updateCounts(this.markdownText);
+    this.hasUnsavedChanges = true;
     this.selectionStart = start + text.length;
     this.selectionEnd = this.selectionStart;
     this.controller.caretPosition(this.selectionStart);
@@ -470,7 +484,8 @@ struct Editor {
     this.markdownText = newText;
     this.recordHistory(newText);
     this.updateCounts(this.markdownText);
-    
+    this.hasUnsavedChanges = true;
+
     if (start === end) {
       this.selectionStart = start + prefix.length;
       this.selectionEnd = this.selectionStart;
@@ -506,6 +521,7 @@ struct Editor {
       fs.renameSync(tmpPath, filePath);
 
       this.hasUnsavedChanges = false; // #1 reset dirty flag
+      this.saveStatus = `已保存 ${this.nowTimeStr()}`;
 
       if (!silent) {
         promptAction.showToast({
@@ -540,14 +556,14 @@ struct Editor {
         }
       }
 
-      // #3 原子写：先写临时文件，再 rename
-      const tmpUri = uri + '.tmp';
-      const file = fs.openSync(tmpUri, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
+      // 外部 URI（picker 返回的公共目录文件）：直接写入。
+      // 不能拼 '.tmp' 再 rename —— 授权只针对该 uri 本身，新路径未授权会失败。
+      const file = fs.openSync(uri, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
       fs.writeSync(file.fd, this.markdownText);
       fs.closeSync(file);
-      fs.renameSync(tmpUri, uri);
 
       this.hasUnsavedChanges = false; // #1 reset dirty flag
+      this.saveStatus = `已保存 ${this.nowTimeStr()}`;
 
       promptAction.showToast({
         message: '保存成功',
@@ -556,8 +572,8 @@ struct Editor {
     } catch (e) {
       console.error('Save file failed:', e);
       promptAction.showToast({
-        message: '保存失败',
-        duration: 1500
+        message: '保存失败：' + (e instanceof Error ? e.message : JSON.stringify(e)),
+        duration: 2500
       });
     }
   }
@@ -883,6 +899,7 @@ struct Editor {
     this.markdownText = currentText;
     this.recordHistory(currentText);
     this.updateCounts(currentText);
+    this.hasUnsavedChanges = true;
 
     const total = plan.steps.length;
     const msg = failed === 0
@@ -1063,6 +1080,26 @@ struct Editor {
 
       // 状态栏
       Row() {
+        // 保存状态指示
+        Row({ space: 4 }) {
+          if (this.hasUnsavedChanges) {
+            Text('●')
+              .fontSize(12)
+              .fontColor('#FF9500')
+            Text('未保存')
+              .fontSize(12)
+              .fontColor(this.isDark ? '#99FFFFFF' : '#99000000')
+          } else if (this.saveStatus) {
+            Text('✓')
+              .fontSize(12)
+              .fontColor('#34C759')
+            Text(this.saveStatus)
+              .fontSize(12)
+              .fontColor(this.isDark ? '#99FFFFFF' : '#99000000')
+          }
+        }
+        .layoutWeight(1)
+
         Text(`Words: ${this.wordCount}  Chars: ${this.charCount}`)
           .fontSize(12)
           .fontColor(this.isDark ? '#99FFFFFF' : '#99000000')
@@ -1071,7 +1108,7 @@ struct Editor {
       .height(32)
       .padding({ left: 24, right: 24 })
       .backgroundColor('transparent')
-      .justifyContent(FlexAlign.End)
+      .justifyContent(FlexAlign.SpaceBetween)
 
       // Hidden Web component for PDF export
       Web({ src: '', controller: this.webController })
