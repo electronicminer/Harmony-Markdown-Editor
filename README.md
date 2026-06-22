@@ -102,10 +102,10 @@ Harmony Markdown Editor 是一款运行在 HarmonyOS NEXT 上的纯原生 Markdo
 - **三种视图模式**：分屏对比 ↔ 仅编辑 ↔ 仅预览，点击工具栏循环切换
 - **悬浮工具栏**：毛玻璃效果悬浮在编辑器顶部，包含 H1/H2、加粗、斜体、代码块、链接、图片、有序/无序列表等快捷插入按钮
 - **撤销 / 重做**：最多保留 100 步历史操作
-- **自动保存**：可配置开关与保存间隔（秒级），后台定时写入文件
+- **自动保存 + 状态指示**：可配置开关与保存间隔（秒级），后台定时写入文件；状态栏实时显示「● 未保存」橙色脏标或「✓ 已自动保存 HH:MM:SS」时间戳，关闭文档时若有未保存修改会弹出确认对话框
 - **文件操作**：
   - 从系统文件选择器打开 `.md` 文件
-  - 保存 / 另存为到指定路径
+  - 保存 / 另存为到指定路径（外部 URI 直接写入，私有目录采用「先写 .tmp 再 rename」的原子写策略）
   - 启动时自动恢复上次打开的文件（可选）
 - **字数统计**：实时显示单词数和字符数
 - **拖拽分栏**：编辑区与预览区之间的分隔线支持拖拽调整比例
@@ -115,15 +115,16 @@ Harmony Markdown Editor 是一款运行在 HarmonyOS NEXT 上的纯原生 Markdo
 
 支持 OpenAI 兼容格式的 API 服务，接入后可实现以下功能：
 
-- **对话式交互**：在 AI 面板中直接提问，AI 返回回答或文档修改建议
-- **操作确认机制**：AI 提出修改方案后，需用户点击"允许执行"才会实际修改文档，避免误操作
+- **对话式交互**：在 AI 面板中直接提问，AI 返回回答或文档修改建议；面板带「思考中」加载指示
+- **多步执行计划（AgentPlan）**：AI 可一次性返回多个有序步骤（`steps[]`），按顺序依次应用到文档；同时向下兼容旧版单步 `action` 字段
+- **操作确认机制**：AI 提出修改方案后，需用户点击「允许执行 (Act)」才会实际修改文档，点击「拒绝」放弃，避免误操作
 - **支持的文档操作**：
   - `replace_content` — 替换指定文本
   - `append_content` — 文档末尾追加内容
   - `insert_content` — 光标位置插入内容
   - `delete_content` — 删除指定文本
 - **快捷操作按钮**：语法帮助、优化写作、表格模板、代码块模板
-- **可配置项**：API URL、API Key、模型名称、系统提示词
+- **可配置项**：API URL、API Key、模型名称、系统提示词；设置面板内置「测试连接」按钮验证连通性
 
 > **注意**：使用前需在设置中自行配置兼容 OpenAI 格式的 API 地址与密钥。
 
@@ -165,19 +166,20 @@ Harmony-Markdown-Editor/
 ├── entry/                                 # 主应用模块（可执行 HAP）
 │   ├── src/main/
 │   │   ├── ets/
+│   │   │   ├── Plugin.ets                  # 编辑器侧 LaTeX tokenizer 扩展
 │   │   │   ├── entryability/
 │   │   │   │   └── EntryAbility.ets       # Ability 生命周期，AGConnect 初始化
 │   │   │   ├── entrybackupability/
 │   │   │   │   └── EntryBackupAbility.ets # 备份恢复扩展
 │   │   │   ├── pages/
 │   │   │   │   ├── Index.ets             # 首页：Markdown 预览 + 文件导航
-│   │   │   │   ├── Editor.ets            # 编辑器：分屏编辑预览 + AI 面板
+│   │   │   │   ├── Editor.ets            # 编辑器：分屏编辑预览 + AI 面板 + 保存状态
 │   │   │   │   ├── CloudDocsPage.ets     # 云文档列表：我的文档 / 分享给我的
 │   │   │   │   ├── RegisterPage.ets      # 登录 & 注册 & 用户资料
 │   │   │   │   ├── ProfilePage.ets       # 个人资料编辑
 │   │   │   │   └── PasswordResetPage.ets # 密码重置
 │   │   │   ├── components/
-│   │   │   │   ├── AIChatPanel.ets       # AI 对话面板
+│   │   │   │   ├── AIChatPanel.ets       # AI 对话面板（含多步计划确认卡片）
 │   │   │   │   ├── ShareDialog.ets       # 文档分享对话框
 │   │   │   │   └── CompletionPanel.ets   # 自动补全面板（预留）
 │   │   │   ├── models/
@@ -185,9 +187,9 @@ Harmony-Markdown-Editor/
 │   │   │   └── utils/
 │   │   │       ├── AuthService.ts        # 华为 AGConnect Auth 封装
 │   │   │       ├── CloudDBService.ts     # 华为 Cloud DB 封装（含本地降级）
-│   │   │       ├── AIService.ets         # AI API 调用（OpenAI 兼容格式）
+│   │   │       ├── AIService.ets         # AI API 调用（含 AgentPlan 多步规整）
 │   │   │       ├── AIConfig.ets          # AI 配置状态管理
-│   │   │       ├── PreferencesUtil.ets   # 偏好设置持久化
+│   │   │       ├── PreferencesUtil.ets   # 偏好设置持久化（含云文档 ID 映射）
 │   │   │       └── MarkdownCompletions.ts # Markdown 语法自动补全（预留）
 │   │   └── resources/                    # 资源文件（string、color、media、rawfile）
 │   └── oh-package.json5
@@ -350,9 +352,9 @@ git clone https://github.com/electronicminer/Harmony-Markdown-Editor.git
 **工作流程：**
 
 1. 在 AI 面板输入问题或指令
-2. AI 回复普通文字，或给出文档修改建议
-3. 如果是修改建议，会弹出确认卡片
-4. 点击 **允许执行 (Act)** 确认修改，**拒绝**放弃
+2. AI 回复普通文字，或给出文档修改建议（支持一次返回多步操作）
+3. 如果是修改建议，会弹出确认卡片，列出本次将依次执行的所有步骤
+4. 点击 **允许执行 (Act)** 按顺序应用全部步骤，**拒绝**放弃
 
 ### 设置项
 
