@@ -1062,6 +1062,9 @@ struct Editor {
               currentContent: this.markdownText,
               onApplyPlan: (plan: AgentPlan) => {
                 this.handleApplyPlan(plan);
+              },
+              onInsertMarkdown: (markdown: string) => {
+                this.insertText(markdown + '\n');
               }
             })
           }

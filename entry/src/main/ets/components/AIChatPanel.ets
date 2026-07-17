@@ -1,7 +1,10 @@
 import { ChatMessage, AIService, AIResponse, AgentPlan, AgentStep } from '../utils/AIService';
 import { AIConfigClass, AIConfig } from '../utils/AIConfig';
+import { Markdown } from '@lidary/markdown';
+import { pickImageAsDataUrl } from '../utils/ImageUtil';
 import { common } from '@kit.AbilityKit';
 import { promptAction } from '@kit.ArkUI';
+import { pasteboard } from '@kit.BasicServicesKit';
 
 /**
  * 快捷操作类型
@@ -33,6 +36,8 @@ export struct AIChatPanel {
   @State inputText: string = '';
   @State isLoading: boolean = false;
   @State showSettings: boolean = false;
+  @State pendingImages: string[] = [];        // 待发送的图片 data URL
+  @State isPickingImage: boolean = false;
 
   // 快捷操作按钮
   private quickActions: QuickAction[] = [
@@ -61,7 +66,9 @@ export struct AIChatPanel {
    * 发送消息
    */
   async sendMessage(): Promise<void> {
-    if (!this.inputText.trim() || this.isLoading) {
+    const hasText: boolean = this.inputText.trim().length > 0;
+    const hasImages: boolean = this.pendingImages.length > 0;
+    if ((!hasText && !hasImages) || this.isLoading) {
       return;
     }
 
@@ -78,23 +85,19 @@ export struct AIChatPanel {
 
     const userMessage: ChatMessage = {
       role: 'user',
-      content: this.inputText
+      content: this.inputText,
+      images: hasImages ? this.pendingImages.slice() : undefined
     };
 
     this.messages.push(userMessage);
-    const currentInput: string = this.inputText;
     this.inputText = '';
+    this.pendingImages = [];
     this.isLoading = true;
 
     try {
-      // #4 移除 AIChatPanel 侧的内容注入，统一由 AIService.chat() 在系统提示中注入（已限长）
-      const messagesWithContext: ChatMessage[] = [
-        ...this.messages.filter(m => m.role !== 'system'),
-        {
-          role: 'user',
-          content: currentInput
-        }
-      ];
+      // 历史消息已含刚 push 的 userMessage(带图片),直接过滤 system 即可;
+      // AIService 内部负责把图片转成 vision 格式,并把历史图片占位化以控制 token。
+      const messagesWithContext: ChatMessage[] = this.messages.filter(m => m.role !== 'system');
 
       // 清除之前的未执行计划
       this.pendingPlan = null;
@@ -141,6 +144,32 @@ export struct AIChatPanel {
       role: 'assistant',
       content: '对话已清空。有什么新的问题可以问我吗？'
     }];
+  }
+
+  /**
+   * 从相册选择图片,压缩转为 data URL 后加入待发送列表
+   */
+  async handlePickImage(): Promise<void> {
+    if (this.isPickingImage) return;
+    this.isPickingImage = true;
+    try {
+      const dataUrl: string | null = await pickImageAsDataUrl();
+      if (dataUrl) {
+        this.pendingImages.push(dataUrl);
+      }
+    } catch (e) {
+      const msg: string = e instanceof Error ? (e as Error).message : String(e);
+      promptAction.showToast({ message: '图片处理失败: ' + msg, duration: 2500 });
+    } finally {
+      this.isPickingImage = false;
+    }
+  }
+
+  /**
+   * 移除待发送列表中的某张图片
+   */
+  removePendingImage(index: number): void {
+    this.pendingImages = this.pendingImages.filter((_: string, i: number) => i !== index);
   }
 
   /**
@@ -264,10 +293,24 @@ export struct AIChatPanel {
                 Row() {
                   Blank()
                   Column() {
-                    Text(item.content)
-                      .fontSize(15)
-                      .fontColor(Color.White)
-                      .width('100%')
+                    if (item.content && item.content.length > 0) {
+                      Text(item.content)
+                        .fontSize(15)
+                        .fontColor(Color.White)
+                        .width('100%')
+                    }
+                    if (item.images && item.images.length > 0) {
+                      Row({ space: 6 }) {
+                        ForEach(item.images!, (img: string) => {
+                          Image(img)
+                            .width(96)
+                            .height(96)
+                            .borderRadius(10)
+                            .objectFit(ImageFit.Cover)
+                        }, (img: string, index: number) => `${index}_${img.length}`)
+                      }
+                      .margin({ top: (item.content !== undefined && item.content.length > 0) ? 8 : 0 })
+                    }
                   }
                   .padding({ left: 16, right: 16, top: 12, bottom: 12 })
                   .backgroundColor('#0A59F7')
@@ -277,22 +320,61 @@ export struct AIChatPanel {
                 }
                 .width('100%')
               } else {
-                // AI 消息 - 左侧
-                Row() {
-                  Column() {
-                    Text(item.content)
-                      .fontSize(15)
-                      .lineHeight(22)
-                      .fontColor(this.isDark ? '#E5FFFFFF' : '#E5000000')
-                      .width('100%')
+                // AI 消息 - 左侧,Markdown 渲染 + 操作按钮
+                Column({ space: 6 }) {
+                  Row() {
+                    Column() {
+                      Markdown({
+                        content: item.content,
+                        options: {
+                          darkMode: this.isDark,
+                          options: { gfm: true }
+                        }
+                      })
+                        .width('100%')
+                    }
+                    .padding({ left: 14, right: 14, top: 10, bottom: 10 })
+                    .backgroundColor(this.isDark ? '#33FFFFFF' : '#F5F5F5')
+                    .borderRadius({ topLeft: 20, topRight: 20, bottomLeft: 4, bottomRight: 20 })
+                    .margin({ left: 16 })
+                    Blank()
                   }
-                  .padding({ left: 16, right: 16, top: 12, bottom: 12 })
-                  .backgroundColor(this.isDark ? '#33FFFFFF' : '#F5F5F5')
-                  .borderRadius({ topLeft: 20, topRight: 20, bottomLeft: 4, bottomRight: 20 })
+                  .width('100%')
+
+                  // 操作按钮:复制 / 插入到文档
+                  Row({ space: 8 }) {
+                    Button('复制')
+                      .fontSize(12)
+                      .height(28)
+                      .padding({ left: 14, right: 14 })
+                      .fontColor(this.isDark ? '#E5FFFFFF' : '#0A59F7')
+                      .backgroundColor(this.isDark ? '#33FFFFFF' : 'rgba(10,89,247,0.08)')
+                      .borderRadius(14)
+                      .onClick(() => {
+                        const pasteData = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, item.content);
+                        pasteboard.getSystemPasteboard().setData(pasteData).then(() => {
+                          promptAction.showToast({ message: '已复制', duration: 1200 });
+                        }).catch(() => {
+                          promptAction.showToast({ message: '复制失败', duration: 1200 });
+                        });
+                      })
+
+                    Button('插入到文档')
+                      .fontSize(12)
+                      .height(28)
+                      .padding({ left: 14, right: 14 })
+                      .fontColor(Color.White)
+                      .backgroundColor('#0A59F7')
+                      .borderRadius(14)
+                      .onClick(() => {
+                        this.onInsertMarkdown(item.content);
+                        promptAction.showToast({ message: '已插入到文档', duration: 1200 });
+                      })
+                  }
                   .margin({ left: 16 })
-                  Blank()
                 }
                 .width('100%')
+                .alignItems(HorizontalAlign.Start)
               }
             }
             .width('100%')
@@ -419,8 +501,51 @@ export struct AIChatPanel {
       .width('100%')
       .padding({ top: 12, bottom: 12 })
 
+      // 待发送图片缩略图预览条
+      if (this.pendingImages.length > 0) {
+        Row({ space: 8 }) {
+          ForEach(this.pendingImages, (img: string, index: number) => {
+            Stack() {
+              Image(img)
+                .width(64)
+                .height(64)
+                .borderRadius(12)
+                .objectFit(ImageFit.Cover)
+              Button({ type: ButtonType.Circle }) {
+                Text('✕')
+                  .fontSize(10)
+                  .fontColor(Color.White)
+              }
+              .width(20)
+              .height(20)
+              .backgroundColor('#99000000')
+              .position({ x: 46, y: -2 })
+              .onClick(() => {
+                this.removePendingImage(index);
+              })
+            }
+            .width(64)
+            .height(64)
+          }, (img: string, index: number) => `${index}_${img.length}`)
+        }
+        .width('100%')
+        .padding({ left: 16, right: 16, bottom: 8 })
+      }
+
       // 输入区域
       Row({ space: 12 }) {
+        // 附件按钮:从相册选图
+        Button({ type: ButtonType.Circle }) {
+          Text('📎')
+            .fontSize(18)
+        }
+        .width(44)
+        .height(44)
+        .backgroundColor(this.isDark ? '#33FFFFFF' : '#0D000000')
+        .onClick(() => {
+          this.handlePickImage();
+        })
+
         TextInput({ text: this.inputText, placeholder: '输入问题...' })
           .fontSize(15)
           .layoutWeight(1)
@@ -453,8 +578,8 @@ export struct AIChatPanel {
         }
         .width(44)
         .height(44)
-        .backgroundColor(this.inputText.trim() && !this.isLoading ? '#0A59F7' : (this.isDark ? '#33FFFFFF' : '#E5E5E5'))
-        .enabled(!!this.inputText.trim() && !this.isLoading)
+        .backgroundColor((this.inputText.trim().length > 0 || this.pendingImages.length > 0) && !this.isLoading ? '#0A59F7' : (this.isDark ? '#33FFFFFF' : '#E5E5E5'))
+        .enabled((this.inputText.trim().length > 0 || this.pendingImages.length > 0) && !this.isLoading)
         .onClick(() => {
           this.sendMessage();
         })

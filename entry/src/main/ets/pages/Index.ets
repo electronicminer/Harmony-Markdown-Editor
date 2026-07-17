@@ -38,7 +38,11 @@ struct AIConfigDialog {
         .fontSize(24)
         .fontWeight(FontWeight.Bold)
         .fontColor(this.isDark ? '#E5FFFFFF' : '#E5000000') // 适配深色模式
-        .margin({ top: 24, bottom: 24 })
+        .margin({ top: 24, bottom: 8 })
+      Text('支持多模态:编辑器 AI 面板点 📎 选图,发给支持 vision 的模型(如 gpt-4o、gemini-2.0)即可识别为 Markdown')
+        .fontSize(12)
+        .fontColor(this.isDark ? '#99FFFFFF' : '#99000000')
+        .margin({ bottom: 20 })
 
       Column({ space: 16 }) {
         // API URL

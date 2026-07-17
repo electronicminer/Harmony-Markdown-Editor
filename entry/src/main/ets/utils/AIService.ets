@@ -1,4 +1,5 @@
 import { http } from '@kit.NetworkKit';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { AIConfigClass } from './AIConfig';
 
 /**
@@ -7,6 +8,7 @@ import { AIConfigClass } from './AIConfig';
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
+  images?: string[]; // data URL(data:image/jpeg;base64,...),仅 user 消息携带,用于多模态图片输入
 }
 
 /**
@@ -53,9 +55,24 @@ export interface AIResponse {
 /**
  * 请求体类型
  */
+interface OpenAIImageUrl {
+  url: string;
+}
+
+interface OpenAIContentPart {
+  type: 'text' | 'image_url';
+  text?: string;
+  image_url?: OpenAIImageUrl;
+}
+
+interface OpenAIMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string | OpenAIContentPart[];
+}
+
 interface ChatRequestBody {
   model: string;
-  messages: ChatMessage[];
+  messages: OpenAIMessage[];
   temperature: number;
   max_tokens: number;
 }
@@ -153,7 +170,14 @@ LOCATING EDITS — READ CAREFULLY:
 - DO NOT copy long blocks of text. 'anchor' is only an optional safety fallback — a SHORT distinctive snippet from startLine; never paste whole paragraphs.
 - You may return MULTIPLE steps. Use real newline characters inside 'content'.
 
-If the user's request is just a normal question (not a document edit), reply normally in plain markdown text WITHOUT any JSON.`;
+If the user's request is just a normal question (not a document edit), reply normally in plain markdown text WITHOUT any JSON.
+
+IMAGE / MULTIMODAL INPUT:
+If the user's message contains image(s) (handwritten notes, math formulas, tables, screenshots, etc.), transcribe and convert the image content into Markdown:
+- Math formulas MUST use LaTeX: inline $...$ for inline, $$...$$ for block.
+- Tables use GFM table syntax.
+- Faithfully transcribe text and preserve structure (headings, lists, code).
+- Only return the JSON plan if the user explicitly asks to EDIT/modify the document; pure image transcription returns plain Markdown text.`;
 
       if (currentContent) {
         // 文档按行加行号注入，供模型用行号精准定位
@@ -200,7 +224,7 @@ If the user's request is just a normal question (not a document edit), reply nor
 
       const requestBody: ChatRequestBody = {
         model: config.model,
-        messages: allMessages,
+        messages: AIService.toOpenAIMessages(allMessages),
         temperature: 0.3,
         max_tokens: 2000
       };
@@ -295,11 +319,57 @@ If the user's request is just a normal question (not a document edit), reply nor
       }
     } catch (e) {
       console.error('AIService chat error:', e);
+      const err: BusinessError = e as BusinessError;
+      const detail: string = (err && err.message) ? `${err.message} (code ${err.code})` : JSON.stringify(e);
       return {
         success: false,
-        error: `请求失败：${e instanceof Error ? e.message : '未知错误'}`
+        error: `请求失败：${detail}`
       };
     }
+  }
+
+  /**
+   * 把内部 ChatMessage[] 转成 OpenAI 兼容消息格式。
+   * 多模态处理:仅最后一条带 images 的 user 消息真正以 image_url 发送图片 base64;
+   * 历史带图消息的图片替换为文本占位 [已上传图片×N],避免多轮对话重复发送大 base64 导致 token 爆炸。
+   */
+  private static toOpenAIMessages(messages: ChatMessage[]): OpenAIMessage[] {
+    let lastImageUserIdx: number = -1;
+    for (let i: number = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'user' && messages[i].images && messages[i].images!.length > 0) {
+        lastImageUserIdx = i;
+        break;
+      }
+    }
+
+    const result: OpenAIMessage[] = [];
+    for (let i: number = 0; i < messages.length; i++) {
+      const m: ChatMessage = messages[i];
+      if (m.role === 'user' && m.images && m.images.length > 0) {
+        const imgs: string[] = m.images!;
+        if (i === lastImageUserIdx) {
+          // 当前轮:图片以 image_url 真实发送
+          const parts: OpenAIContentPart[] = [];
+          if (m.content && m.content.length > 0) {
+            parts.push({ type: 'text', text: m.content });
+          }
+          for (let j: number = 0; j < imgs.length; j++) {
+            const imgUrl: OpenAIImageUrl = { url: imgs[j] };
+            const imgPart: OpenAIContentPart = { type: 'image_url', image_url: imgUrl };
+            parts.push(imgPart);
+          }
+          result.push({ role: m.role, content: parts });
+        } else {
+          // 历史轮:图片占位,不发 base64
+          const placeholder: string = `[已上传图片×${imgs.length}]`;
+          const merged: string = m.content && m.content.length > 0 ? `${m.content}\n${placeholder}` : placeholder;
+          result.push({ role: m.role, content: merged });
+        }
+      } else {
+        result.push({ role: m.role, content: m.content });
+      }
+    }
+    return result;
   }
 
   /**
