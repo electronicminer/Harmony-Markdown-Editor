@@ -173,6 +173,18 @@ export struct AIChatPanel {
   }
 
   /**
+   * 识别课件/板书:选图 -> AI 自动提炼知识点、摘要、错题、思维导图
+   */
+  async handleAnalyzeImage(): Promise<void> {
+    if (this.isLoading) return;
+    const dataUrl: string | null = await pickImageAsDataUrl();
+    if (!dataUrl) return;
+    this.inputText = '请分析这张课件/板书图片，按以下4个部分整理回复：\n\n## 📖 知识点提炼\n列出核心知识点\n\n## 📝 内容摘要\n概括内容\n\n## ❌ 错题分析(如果有)\n暂无\n\n## 🧠 知识导图(大纲格式)\n用缩进列表展示层级关系';
+    this.pendingImages.push(dataUrl);
+    this.sendMessage();
+  }
+
+  /**
    * 操作类型对应的图标
    */
   stepIcon(action: string): string {
@@ -493,6 +505,18 @@ export struct AIChatPanel {
                 this.useQuickAction(action.prompt);
               })
           })
+          // 课件/板书识别
+          Button('📷 识别课件')
+            .fontSize(12)
+            .fontWeight(FontWeight.Medium)
+            .height(32)
+            .padding({ left: 14, right: 14 })
+            .backgroundColor(this.isDark ? '#33FFFFFF' : '#0D000000')
+            .fontColor(this.isDark ? '#E5FFFFFF' : '#E5000000')
+            .borderRadius(16)
+            .onClick(() => {
+              this.handleAnalyzeImage();
+            })
         }
         .padding({ left: 16, right: 16 })
       }

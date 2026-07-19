@@ -7,6 +7,8 @@ import { picker, fileIo as fs } from '@kit.CoreFileKit';
 import { PreferencesUtil } from '../utils/PreferencesUtil';
 import { AIConfigClass } from '../utils/AIConfig';
 import { AIService } from '../utils/AIService';
+import { TemplateDialog } from '../components/TemplateDialog';
+import { NoteTemplate } from '../utils/NoteTemplates';
 
 // 明确声明 Promise 返回值的接口，防止被推导为 any/unknown
 interface AIConnectionResult {
@@ -471,6 +473,36 @@ struct Index {
     autoCancel: true,
     customStyle: true // ✅ 加上这行，去除系统默认白底
   });
+
+  // 3. 笔记模板选择弹窗控制器
+  templateDialogController: CustomDialogController = new CustomDialogController({
+    builder: TemplateDialog({
+      isDark: this.isDark,
+      onSelect: (t: NoteTemplate) => {
+        this.onTemplateSelected(t);
+      }
+    }),
+    alignment: DialogAlignment.Center,
+    autoCancel: true,
+    customStyle: true
+  });
+
+  onTemplateSelected(t: NoteTemplate): void {
+    try {
+      router.pushUrl({
+        url: 'pages/Editor',
+        params: {
+          content: t.content,
+          uri: '',
+          isDark: this.isDark,
+          viewMode: this.defaultViewMode
+        }
+      });
+    } catch (error) {
+      const e = error as BusinessError;
+      console.error('pushUrl error: ' + e.message);
+    }
+  }
   
   onFollowSystemChange() {
     if (this.followSystem) {
@@ -762,6 +794,11 @@ struct Index {
               console.error('pushUrl error: ' + e.message);
             }
           }, false, 24);
+
+          // 笔记模板
+          this.GlassButton('📝', () => {
+            this.templateDialogController.open();
+          });
 
           // 编辑当前文件
           this.GlassButton('✏️', () => {

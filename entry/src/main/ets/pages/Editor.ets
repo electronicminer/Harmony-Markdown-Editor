@@ -15,6 +15,8 @@ import { CloudDBService } from '../utils/CloudDBService';
 import { AuthService } from '../utils/AuthService';
 import { UserDocument } from '../models/UserDocument';
 import { ShareDialog } from '../components/ShareDialog';
+import { TemplateDialog } from '../components/TemplateDialog';
+import { NoteTemplate } from '../utils/NoteTemplates';
 import Long from 'long';
 // 自动补全功能导入（已注释）
 // import { CompletionItem, filterCompletions, checkTrigger, TriggerInfo, CompletionItemType } from '../utils/MarkdownCompletions';
@@ -215,6 +217,24 @@ struct Editor {
     alignment: DialogAlignment.Center,
     customStyle: true
   });
+
+  // 笔记模板选择对话框控制器
+  private templateDialogController: CustomDialogController = new CustomDialogController({
+    builder: TemplateDialog({
+      isDark: this.isDark,
+      onSelect: (t: NoteTemplate) => {
+        this.onTemplateSelected(t);
+      }
+    }),
+    autoCancel: true,
+    alignment: DialogAlignment.Center,
+    customStyle: true
+  });
+
+  onTemplateSelected(t: NoteTemplate): void {
+    this.insertText(t.content);
+    promptAction.showToast({ message: '已插入模板', duration: 1200 });
+  }
 
   // ==================== 自动补全功能（已注释） ====================
   // @State showCompletion: boolean = false;
@@ -1231,6 +1251,9 @@ struct Editor {
             .borderRadius(22)
             .backgroundColor(this.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)')
             .backdropBlur(50)
+            this.GlassIconButton('📝', () => {
+              this.templateDialogController.open();
+            })
             this.GlassIconButton('💾', () => {
               this.saveFile()
             })
