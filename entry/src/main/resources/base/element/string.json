@@ -11,6 +11,10 @@
     {
       "name": "EntryAbility_label",
       "value": "鸿蒙markdown"
+    },
+    {
+      "name": "reason_microphone",
+      "value": "用于课堂录音转文字"
     }
   ]
 }

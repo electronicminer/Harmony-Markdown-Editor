@@ -2,9 +2,10 @@ import { ChatMessage, AIService, AIResponse, AgentPlan, AgentStep } from '../uti
 import { AIConfigClass, AIConfig } from '../utils/AIConfig';
 import { Markdown } from '@lidary/markdown';
 import { pickImageAsDataUrl } from '../utils/ImageUtil';
-import { common } from '@kit.AbilityKit';
+import { common, abilityAccessCtrl } from '@kit.AbilityKit';
 import { promptAction } from '@kit.ArkUI';
-import { pasteboard } from '@kit.BasicServicesKit';
+import { pasteboard, BusinessError } from '@kit.BasicServicesKit';
+import { speechRecognizer } from '@kit.CoreSpeechKit';
 
 /**
  * 快捷操作类型
@@ -38,6 +39,9 @@ export struct AIChatPanel {
   @State showSettings: boolean = false;
   @State pendingImages: string[] = [];        // 待发送的图片 data URL
   @State isPickingImage: boolean = false;
+  @State isRecording: boolean = false;
+  private speechEngine: speechRecognizer.SpeechRecognitionEngine | null = null;
+  private speechSessionId: string = '';
 
   // 快捷操作按钮
   private quickActions: QuickAction[] = [
@@ -182,6 +186,88 @@ export struct AIChatPanel {
     this.inputText = '请分析这张课件/板书图片，按以下4个部分整理回复：\n\n## 📖 知识点提炼\n列出核心知识点\n\n## 📝 内容摘要\n概括内容\n\n## ❌ 错题分析(如果有)\n暂无\n\n## 🧠 知识导图(大纲格式)\n用缩进列表展示层级关系';
     this.pendingImages.push(dataUrl);
     this.sendMessage();
+  }
+
+  /**
+   * 启动录音:请求权限 -> 创建引擎 -> 系统麦克风识别 -> 结果进输入框。
+   * 自动结束(静默 3 秒),不持引用。
+   */
+  async startRecording(): Promise<void> {
+    if (this.isRecording) return;
+    this.isRecording = true;
+
+    // 1. 请求麦克风权限
+    try {
+      const atManager = abilityAccessCtrl.createAtManager();
+      const result = await atManager.requestPermissionsFromUser(this.context, ['ohos.permission.MICROPHONE']);
+      const authorized: boolean = result.authResults.every((r: number) => r === 0);
+      if (!authorized) {
+        promptAction.showToast({ message: '需授予麦克风权限', duration: 2000 });
+        this.isRecording = false;
+        return;
+      }
+    } catch (e) {
+      promptAction.showToast({ message: '权限请求失败', duration: 2000 });
+      this.isRecording = false;
+      return;
+    }
+
+    try {
+      // 2. 创建语音识别引擎
+      const sessionId: string = Date.now().toString(36);
+      const engine: speechRecognizer.SpeechRecognitionEngine = await new Promise(
+        (resolve: (e: speechRecognizer.SpeechRecognitionEngine) => void,
+         reject: (err: BusinessError) => void) => {
+          speechRecognizer.createEngine({
+            language: 'zh-CN',
+            online: 1,
+            extraParams: { 'locate': 'CN', 'recognizerMode': 'short' }
+          }, (err: BusinessError | null, engine?: speechRecognizer.SpeechRecognitionEngine) => {
+            if (err) {
+              reject(err);
+            } else if (engine) {
+              resolve(engine);
+            }
+          });
+        });
+      this.speechEngine = engine;
+      this.speechSessionId = sessionId;
+
+      // 3. 注册回调
+      engine.setListener({
+        onStart: () => {
+          promptAction.showToast({ message: '请说话...', duration: 1500 });
+        },
+        onResult: (_sessionId: string, result: speechRecognizer.SpeechRecognitionResult) => {
+          if (result && result.result) {
+            this.inputText = result.result;
+          }
+        },
+        onComplete: () => {
+          try { engine.shutdown(); } catch {}
+          this.speechEngine = null;
+          this.isRecording = false;
+          promptAction.showToast({ message: '识别完成', duration: 1200 });
+        },
+        onError: (_sessionId: string, _code: number, _errorMessage: string) => {
+          try { engine.shutdown(); } catch {}
+          this.speechEngine = null;
+          this.isRecording = false;
+        },
+        onEvent: () => {}
+      });
+
+      // 4. 开始录音识别
+      engine.startListening({
+        sessionId: sessionId,
+        audioInfo: { audioType: 'pcm', sampleRate: 16000, soundChannel: 1, sampleBit: 16 },
+        extraParams: { 'recognitionMode': 0, 'vadBegin': 2000, 'vadEnd': 3000, 'maxAudioDuration': 20000 }
+      });
+    } catch (e) {
+      const err: BusinessError = e as BusinessError;
+      promptAction.showToast({ message: '录音启动失败: ' + err.message, duration: 2000 });
+      this.isRecording = false;
+    }
   }
 
   /**
@@ -558,7 +644,7 @@ export struct AIChatPanel {
 
       // 输入区域
       Row({ space: 12 }) {
-        // 附件按钮:从相册选图
+        // 附件区域:选图 + 录音
         Button({ type: ButtonType.Circle }) {
           Text('📎')
             .fontSize(18)
@@ -568,6 +654,31 @@ export struct AIChatPanel {
         .backgroundColor(this.isDark ? '#33FFFFFF' : '#0D000000')
         .onClick(() => {
           this.handlePickImage();
+        })
+
+        // 录音按钮
+        Button({ type: ButtonType.Circle }) {
+          if (this.isRecording) {
+            LoadingProgress()
+              .width(20)
+              .height(20)
+              .color('#F4222D')
+          } else {
+            Text('🎤')
+              .fontSize(18)
+          }
+        }
+        .width(44)
+        .height(44)
+        .backgroundColor(this.isRecording ? 'rgba(244,34,45,0.1)' : (this.isDark ? '#33FFFFFF' : '#0D000000'))
+        .onClick(() => {
+          if (this.isRecording) {
+            if (this.speechEngine) {
+              this.speechEngine.finish(this.speechSessionId);
+            }
+          } else {
+            this.startRecording();
+          }
         })
 
         TextInput({ text: this.inputText, placeholder: '输入问题...' })
