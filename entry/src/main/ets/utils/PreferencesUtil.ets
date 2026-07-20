@@ -230,4 +230,52 @@ export class PreferencesUtil {
     const prefs = await PreferencesUtil.getPreferences(context);
     return await prefs.get(PreferencesUtil.KEY_PROFILE_AVATAR_COLOR, '#0A59F7') as string;
   }
+
+  // Tag History - 用户历史用过的标签(去重,逗号分隔)
+  private static readonly KEY_TAG_HISTORY = 'tagHistory';
+
+  static async saveTagHistory(context: common.UIAbilityContext, tags: string[]): Promise<void> {
+    const joined = tags.map(t => t.trim()).filter(t => t.length > 0).join(',');
+    const prefs = await PreferencesUtil.getPreferences(context);
+    await prefs.put(PreferencesUtil.KEY_TAG_HISTORY, joined);
+    await prefs.flush();
+  }
+
+  static async getTagHistory(context: common.UIAbilityContext): Promise<string[]> {
+    const prefs = await PreferencesUtil.getPreferences(context);
+    const raw = await prefs.get(PreferencesUtil.KEY_TAG_HISTORY, '') as string;
+    if (!raw) return [];
+    return raw.split(',').map(t => t.trim()).filter(t => t.length > 0);
+  }
+
+  // Local Tags Map — 本地文件/文档 → 标签(用于无云端时持久化)
+  private static readonly KEY_LOCAL_TAGS_MAP = 'localTagsMap';
+
+  static async saveLocalTag(context: common.UIAbilityContext, docId: string, tags: string): Promise<void> {
+    if (!docId) return;
+    const prefs = await PreferencesUtil.getPreferences(context);
+    const raw = await prefs.get(PreferencesUtil.KEY_LOCAL_TAGS_MAP, '{}') as string;
+    const map: Record<string, string> = JSON.parse(raw) as Record<string, string>;
+    map[docId] = tags;
+    await prefs.put(PreferencesUtil.KEY_LOCAL_TAGS_MAP, JSON.stringify(map));
+    await prefs.flush();
+  }
+
+  static async getLocalTag(context: common.UIAbilityContext, docId: string): Promise<string> {
+    if (!docId) return '';
+    const prefs = await PreferencesUtil.getPreferences(context);
+    const raw = await prefs.get(PreferencesUtil.KEY_LOCAL_TAGS_MAP, '{}') as string;
+    const map: Record<string, string> = JSON.parse(raw) as Record<string, string>;
+    return map[docId] || '';
+  }
+
+  /** 把当前标签合并进历史(去重,保留最多 50 个) */
+  static async mergeTagHistory(context: common.UIAbilityContext, currentTags: string[]): Promise<void> {
+    const existing = await PreferencesUtil.getTagHistory(context);
+    const set: Set<string> = new Set();
+    for (const t of currentTags) set.add(t);
+    for (const t of existing) set.add(t);
+    const merged = Array.from(set).slice(0, 50);
+    await PreferencesUtil.saveTagHistory(context, merged);
+  }
 }

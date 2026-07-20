@@ -1,9 +1,13 @@
 import { promptAction, router } from '@kit.ArkUI';
 import { http } from '@kit.NetworkKit';
+import { common } from '@kit.AbilityKit';
 import { AuthService } from '../utils/AuthService';
 import { CloudDBService } from '../utils/CloudDBService';
 import { UserDocument } from '../models/UserDocument';
 import { ShareDialog } from '../components/ShareDialog';
+import { collectTags } from '../utils/TagsUtil';
+import { SearchService } from '../utils/SearchService';
+import { PreferencesUtil } from '../utils/PreferencesUtil';
 
 // #8 删除确认对话框（风格对齐 ShareDialog）
 @CustomDialog
@@ -68,6 +72,10 @@ struct CloudDocsPage {
   @State isDark: boolean = false;
   @State isCloudConnected: boolean = false;
   @State selectedDoc: UserDocument = new UserDocument();
+  // 搜索与标签筛选
+  @State searchKeyword: string = '';
+  @State activeTag: string = '';
+  @State allTags: string[] = [];
   // #8 删除目标文档（在打开确认对话框前设置）
   @State deleteTargetDoc: UserDocument = new UserDocument();
 
@@ -141,6 +149,16 @@ struct CloudDocsPage {
     this.sharedDocs = results[1];
     // 查询完成后再次检查连接状态，防止 init() 成功但实际查询失败回退到本地模式
     this.isCloudConnected = !CloudDBService.isDemoMode;
+
+    // 用本地持久化的标签补充每个文档(云端 schema 可能未同步 tags 字段)
+    const ctx = getContext(this) as common.UIAbilityContext;
+    for (const doc of this.myDocs) {
+      if (!doc.tags) {
+        doc.tags = await PreferencesUtil.getLocalTag(ctx, doc.id);
+      }
+    }
+
+    this.allTags = collectTags(this.myDocs);
     this.isLoading = false;
   }
 
@@ -255,6 +273,21 @@ struct CloudDocsPage {
                 .backgroundColor('rgba(114,46,209,0.1)')
             }
           }
+
+          // 标签显示
+          if (doc.tags) {
+            Row({ space: 4 }) {
+              ForEach(doc.getTags(), (tag: string) => {
+                Text('#' + tag)
+                  .fontSize(10)
+                  .fontColor('#0A59F7')
+                  .padding({ left: 6, right: 6, top: 2, bottom: 2 })
+                  .borderRadius(4)
+                  .backgroundColor('rgba(10,89,247,0.08)')
+                  .margin({ top: 4 })
+              }, (tag: string) => tag)
+            }
+          }
         }
         .alignItems(HorizontalAlign.Start)
         .layoutWeight(1)
@@ -300,6 +333,20 @@ struct CloudDocsPage {
     .backgroundColor(this.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(10,89,247,0.04)')
   }
 
+  /**
+   * 获取过滤后的我文档列表(搜索 + 标签)
+   */
+  getFilteredDocs(): UserDocument[] {
+    let docs: UserDocument[] = this.myDocs;
+    if (this.activeTag) {
+      docs = SearchService.filterByTag(docs, this.activeTag);
+    }
+    if (this.searchKeyword.trim()) {
+      docs = SearchService.search(docs, this.searchKeyword);
+    }
+    return docs;
+  }
+
   @Builder
   TabButton(label: string, tabIndex: number, onClick: () => void) {
     Text(label)
@@ -330,7 +377,53 @@ struct CloudDocsPage {
             .onClick(() => { this.showImportDialog = true; })
         }
         .width('92%')
-        .margin({ bottom: 16 })
+        .margin({ bottom: 8 })
+
+        // 搜索框
+        Row({ space: 8 }) {
+          TextInput({ text: this.searchKeyword, placeholder: '搜索关键词...' })
+            .fontSize(14)
+            .height(36)
+            .layoutWeight(1)
+            .fontColor(this.isDark ? '#E5FFFFFF' : '#E5000000')
+            .placeholderColor(this.isDark ? '#66FFFFFF' : '#66000000')
+            .backgroundColor(this.isDark ? '#33FFFFFF' : '#0D000000')
+            .borderRadius(18)
+            .padding({ left: 16, right: 16 })
+            .onChange((v: string) => { this.searchKeyword = v; })
+        }
+        .width('92%')
+        .margin({ bottom: 8 })
+
+        // 标签 chips 横滚条(仅活跃标签显示)
+        if (this.allTags.length > 0 && this.activeTab === 0) {
+          Scroll() {
+            Row({ space: 6 }) {
+              // "全部" chip
+              Text('全部')
+                .fontSize(12)
+                .fontColor(this.activeTag === '' ? Color.White : (this.isDark ? '#CCFFFFFF' : '#66000000'))
+                .padding({ left: 12, right: 12, top: 5, bottom: 5 })
+                .borderRadius(14)
+                .backgroundColor(this.activeTag === '' ? '#0A59F7' : (this.isDark ? '#1AFFFFFF' : '#0D000000'))
+                .onClick(() => { this.activeTag = ''; })
+              ForEach(this.allTags, (tag: string) => {
+                Text('#' + tag)
+                  .fontSize(12)
+                  .fontColor(this.activeTag === tag ? Color.White : (this.isDark ? '#CCFFFFFF' : '#66000000'))
+                  .padding({ left: 12, right: 12, top: 5, bottom: 5 })
+                  .borderRadius(14)
+                  .backgroundColor(this.activeTag === tag ? '#0A59F7' : (this.isDark ? '#1AFFFFFF' : '#0D000000'))
+                  .onClick(() => { this.activeTag = this.activeTag === tag ? '' : tag; })
+              }, (tag: string) => tag)
+            }
+            .padding({ left: 16, right: 16 })
+          }
+          .scrollable(ScrollDirection.Horizontal)
+          .scrollBar(BarState.Off)
+          .width('92%')
+          .margin({ bottom: 12 })
+        }
 
         if (this.isLoading) {
           Column() {
@@ -359,10 +452,24 @@ struct CloudDocsPage {
                   .width('100%')
                   .padding({ top: 60 })
                   .alignItems(HorizontalAlign.Center)
+                } else if (this.getFilteredDocs().length === 0) {
+                  Column({ space: 8 }) {
+                    Text('🔍')
+                      .fontSize(40)
+                    Text('没有匹配的文档')
+                      .fontSize(15)
+                      .fontColor(this.isDark ? '#99FFFFFF' : '#99000000')
+                    Text('试试其他关键词或标签')
+                      .fontSize(12)
+                      .fontColor(this.isDark ? '#66FFFFFF' : '#66000000')
+                  }
+                  .width('100%')
+                  .padding({ top: 60 })
+                  .alignItems(HorizontalAlign.Center)
                 } else {
-                  ForEach(this.myDocs, (doc: UserDocument) => {
+                  ForEach(this.getFilteredDocs(), (doc: UserDocument) => {
                     this.DocCard(doc, true)
-                  })
+                  }, (doc: UserDocument) => doc.id)
                 }
               } else {
                 if (this.sharedDocs.length === 0) {

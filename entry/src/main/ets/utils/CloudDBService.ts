@@ -25,6 +25,8 @@ interface CloudDocumentJson {
   updatedAt: number;
   isPublic: boolean;
   sharedWith: string;
+  tags?: string;
+  isEncrypted?: boolean;
 }
 
 interface ServiceResult {
@@ -179,7 +181,8 @@ export class CloudDBService {
         content: doc.content,
         createdAt: doc.createdAt.toNumber(),
         updatedAt: doc.updatedAt.toNumber(),
-        isPublic: doc.isPublic, sharedWith: doc.sharedWith
+        isPublic: doc.isPublic, sharedWith: doc.sharedWith,
+        tags: doc.tags, isEncrypted: doc.isEncrypted
       };
       if (idx >= 0) {
         docs[idx] = json;

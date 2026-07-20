@@ -12,6 +12,8 @@ export class UserDocument {
   updatedAt: Long = Long.ZERO;
   isPublic: boolean = false;
   sharedWith: string = '';
+  tags: string = '';            // 标签,逗号分隔(如 "高数,第三章,重点")
+  isEncrypted: boolean = false; // 预留:加密标记(本轮不实装加密)
 
   static toLong(v: Object | undefined | null): Long {
     if (v === undefined || v === null) return Long.ZERO;
@@ -35,6 +37,12 @@ export class UserDocument {
       doc.isPublic = String(map['isPublic']) === 'true' || map['isPublic'] === 1;
     }
     doc.sharedWith = String(map['sharedWith'] || '');
+    doc.tags = String(map['tags'] || '');
+    if (typeof map['isEncrypted'] === 'boolean') {
+      doc.isEncrypted = map['isEncrypted'] as boolean;
+    } else {
+      doc.isEncrypted = String(map['isEncrypted']) === 'true' || map['isEncrypted'] === 1;
+    }
     return doc;
   }
 
@@ -79,5 +87,11 @@ export class UserDocument {
     const emails = this.sharedWith ? this.sharedWith.split(',').map(s => s.trim().toLowerCase()) : [];
     const filtered = emails.filter(u => u !== normalized);
     this.sharedWith = filtered.join(',');
+  }
+
+  /** 解析标签为数组 */
+  getTags(): string[] {
+    if (!this.tags) return [];
+    return this.tags.split(',').map(t => t.trim()).filter(t => t.length > 0);
   }
 }
