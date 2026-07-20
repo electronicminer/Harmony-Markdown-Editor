@@ -19,8 +19,10 @@ import { TemplateDialog } from '../components/TemplateDialog';
 import { NoteTemplate } from '../utils/NoteTemplates';
 import { TagEditor } from '../components/TagEditor';
 import { VersionHistoryDialog } from '../components/VersionHistoryDialog';
+import { ExportDialog } from '../components/ExportDialog';
 import { DocumentVersion } from '../models/DocumentVersion';
 import { VersionService } from '../utils/VersionService';
+import { ExportService, ExportFormat } from '../utils/ExportService';
 import Long from 'long';
 // 自动补全功能导入（已注释）
 // import { CompletionItem, filterCompletions, checkTrigger, TriggerInfo, CompletionItemType } from '../utils/MarkdownCompletions';
@@ -269,6 +271,41 @@ struct Editor {
     alignment: DialogAlignment.Center,
     customStyle: true
   });
+
+  // 导出格式选择对话框控制器
+  private exportDialogController: CustomDialogController = new CustomDialogController({
+    builder: ExportDialog({
+      isDark: this.isDark,
+      onExport: (format: ExportFormat) => {
+        this.onExport(format);
+      }
+    }),
+    autoCancel: true,
+    alignment: DialogAlignment.Center,
+    customStyle: true
+  });
+
+  /**
+   * 导出当前文档为指定格式
+   */
+  async onExport(format: ExportFormat): Promise<void> {
+    const title: string = this.markdownText.split('\n')[0]?.replace(/^#+\s*/, '').trim() || 'note';
+    try {
+      const ctx = getContext(this) as common.UIAbilityContext;
+      const ok: boolean = await ExportService.export(ctx, this.markdownText, format, title);
+      if (ok) {
+        if (format === 'pdf') {
+          // PDF 端上无法直接生成,实际导出 HTML,提示用浏览器打印
+          promptAction.showToast({ message: '已导出 HTML,请用浏览器打开后 Ctrl+P 保存为 PDF', duration: 3000 });
+        } else {
+          promptAction.showToast({ message: '已导出', duration: 1500 });
+        }
+      }
+    } catch (e) {
+      const err: BusinessError = e as BusinessError;
+      promptAction.showToast({ message: '导出失败: ' + err.message, duration: 2000 });
+    }
+  }
 
   /**
    * 打开标签编辑:确保 cloudDocForTags 是当前文档的可编辑副本
@@ -1290,12 +1327,14 @@ struct Editor {
         .onPageEnd(() => {
           if (this.isExporting) {
             this.isExporting = false;
+            promptAction.showToast({ message: '页面已加载,尝试调用打印...', duration: 1500 });
             try {
               // Use window.print() to trigger print dialog
               this.webController.runJavaScript('window.print()');
               this.isLoading = false;
             } catch (e) {
               console.error('Print failed:', e);
+              promptAction.showToast({ message: '打印调用失败', duration: 1500 });
               this.isLoading = false;
             }
           }
@@ -1405,6 +1444,9 @@ struct Editor {
             })
             this.GlassIconButton('💾', () => {
               this.saveFile()
+            })
+            this.GlassIconButton('📤', () => {
+              this.exportDialogController.open()
             })
             this.GlassIconButton(this.isCloudSyncing ? '⏳' : '☁️', () => {
               if (!this.isCloudSyncing) this.cloudSave()
