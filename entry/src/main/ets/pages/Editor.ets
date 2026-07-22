@@ -17,6 +17,11 @@ import { UserDocument } from '../models/UserDocument';
 import { ShareDialog } from '../components/ShareDialog';
 import { TemplateDialog } from '../components/TemplateDialog';
 import { NoteTemplate } from '../utils/NoteTemplates';
+import { VersionHistoryDialog } from '../components/VersionHistoryDialog';
+import { ExportDialog } from '../components/ExportDialog';
+import { DocumentVersion } from '../models/DocumentVersion';
+import { VersionService } from '../utils/VersionService';
+import { ExportService, ExportFormat } from '../utils/ExportService';
 import Long from 'long';
 // 自动补全功能导入（已注释）
 // import { CompletionItem, filterCompletions, checkTrigger, TriggerInfo, CompletionItemType } from '../utils/MarkdownCompletions';
@@ -180,6 +185,8 @@ struct Editor {
   @State cloudDocId: string = '';
   @State isCloudSyncing: boolean = false;
   @State cloudDocForShare: UserDocument = new UserDocument();
+  @State versions: DocumentVersion[] = [];
+  private versionDialogDoc: UserDocument = new UserDocument();
   private shareDialogController: CustomDialogController = new CustomDialogController({
     builder: ShareDialog({
       doc: this.cloudDocForShare,
@@ -234,6 +241,97 @@ struct Editor {
   onTemplateSelected(t: NoteTemplate): void {
     this.insertText(t.content);
     promptAction.showToast({ message: '已插入模板', duration: 1200 });
+  }
+
+  // 版本历史对话框控制器
+  private versionHistoryController: CustomDialogController = new CustomDialogController({
+    builder: VersionHistoryDialog({
+      isDark: this.isDark,
+      versions: this.versions,
+      onRestore: (v: DocumentVersion) => {
+        this.restoreVersion(v);
+      }
+    }),
+    autoCancel: true,
+    alignment: DialogAlignment.Center,
+    customStyle: true
+  });
+
+  // 导出格式选择对话框控制器
+  private exportDialogController: CustomDialogController = new CustomDialogController({
+    builder: ExportDialog({
+      isDark: this.isDark,
+      onExport: (format: ExportFormat) => {
+        this.onExport(format);
+      }
+    }),
+    autoCancel: true,
+    alignment: DialogAlignment.Center,
+    customStyle: true
+  });
+
+  /**
+   * 导出当前文档为指定格式
+   */
+  async onExport(format: ExportFormat): Promise<void> {
+    const title: string = this.markdownText.split('\n')[0]?.replace(/^#+\s*/, '').trim() || 'note';
+    try {
+      const ctx = getContext(this) as common.UIAbilityContext;
+      const ok: boolean = await ExportService.export(ctx, this.markdownText, format, title);
+      if (ok) {
+        if (format === 'pdf') {
+          // PDF 端上无法直接生成,实际导出 HTML,提示用浏览器打印
+          promptAction.showToast({ message: '已导出 HTML,请用浏览器打开后 Ctrl+P 保存为 PDF', duration: 3000 });
+        } else {
+          promptAction.showToast({ message: '已导出', duration: 1500 });
+        }
+      }
+    } catch (e) {
+      const err: BusinessError = e as BusinessError;
+      promptAction.showToast({ message: '导出失败: ' + err.message, duration: 2000 });
+    }
+  }
+
+  /**
+   * 打开版本历史对话框
+   */
+  async openVersionHistory(): Promise<void> {
+    if (!this.cloudDocId) {
+      promptAction.showToast({ message: '本地文档暂无版本历史,保存到云端后记录', duration: 2000 });
+      return;
+    }
+    const context = getContext(this) as common.UIAbilityContext;
+    const doc = await CloudDBService.getDocumentById(this.cloudDocId);
+    if (!doc) {
+      promptAction.showToast({ message: '未找到云端文档', duration: 1500 });
+      return;
+    }
+    this.versionDialogDoc = doc;
+    this.versions = await VersionService.listVersions(context, this.cloudDocId);
+    this.versionHistoryController = new CustomDialogController({
+      builder: VersionHistoryDialog({
+        isDark: this.isDark,
+        versions: this.versions,
+        onRestore: (v: DocumentVersion) => {
+          this.restoreVersion(v);
+        }
+      }),
+      autoCancel: true,
+      alignment: DialogAlignment.Center,
+      customStyle: true
+    });
+    this.versionHistoryController.open();
+  }
+
+  /**
+   * 恢复某个历史版本:用其内容覆盖当前编辑器
+   */
+  async restoreVersion(v: DocumentVersion): Promise<void> {
+    this.markdownText = v.content;
+    this.recordHistory(v.content);
+    this.updateCounts(v.content);
+    this.hasUnsavedChanges = true;
+    promptAction.showToast({ message: '已恢复,记得保存', duration: 2000 });
   }
 
   // ==================== 自动补全功能（已注释） ====================
@@ -651,6 +749,9 @@ struct Editor {
         const context = getContext(this) as common.UIAbilityContext;
         PreferencesUtil.saveCloudDocId(context, this.fileUri, savedDoc.id);
       }
+      // 保存版本快照(异步,不阻塞 UI)
+      const ctx = getContext(this) as common.UIAbilityContext;
+      VersionService.saveVersion(ctx, savedDoc).then(() => {}).catch(() => {});
       promptAction.showToast({ message: result.message, duration: 1500 });
     } else {
       promptAction.showToast({ message: result.message, duration: 2000 });
@@ -1141,12 +1242,14 @@ struct Editor {
         .onPageEnd(() => {
           if (this.isExporting) {
             this.isExporting = false;
+            promptAction.showToast({ message: '页面已加载,尝试调用打印...', duration: 1500 });
             try {
               // Use window.print() to trigger print dialog
               this.webController.runJavaScript('window.print()');
               this.isLoading = false;
             } catch (e) {
               console.error('Print failed:', e);
+              promptAction.showToast({ message: '打印调用失败', duration: 1500 });
               this.isLoading = false;
             }
           }
@@ -1257,11 +1360,17 @@ struct Editor {
             this.GlassIconButton('💾', () => {
               this.saveFile()
             })
+            this.GlassIconButton('📤', () => {
+              this.exportDialogController.open()
+            })
             this.GlassIconButton(this.isCloudSyncing ? '⏳' : '☁️', () => {
               if (!this.isCloudSyncing) this.cloudSave()
             })
             this.GlassIconButton('🔗', () => {
               this.openShareDialog()
+            })
+            this.GlassIconButton('⏱️', () => {
+              this.openVersionHistory()
             })
             this.GlassIconButton(this.isDark ? '☀️' : '🌙', () => {
               const context = getContext(this) as common.UIAbilityContext;

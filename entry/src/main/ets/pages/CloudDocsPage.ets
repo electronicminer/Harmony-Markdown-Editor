@@ -4,6 +4,7 @@ import { AuthService } from '../utils/AuthService';
 import { CloudDBService } from '../utils/CloudDBService';
 import { UserDocument } from '../models/UserDocument';
 import { ShareDialog } from '../components/ShareDialog';
+import { SearchService } from '../utils/SearchService';
 
 // #8 删除确认对话框（风格对齐 ShareDialog）
 @CustomDialog
@@ -68,6 +69,8 @@ struct CloudDocsPage {
   @State isDark: boolean = false;
   @State isCloudConnected: boolean = false;
   @State selectedDoc: UserDocument = new UserDocument();
+  // 关键词搜索
+  @State searchKeyword: string = '';
   // #8 删除目标文档（在打开确认对话框前设置）
   @State deleteTargetDoc: UserDocument = new UserDocument();
 
@@ -141,6 +144,7 @@ struct CloudDocsPage {
     this.sharedDocs = results[1];
     // 查询完成后再次检查连接状态，防止 init() 成功但实际查询失败回退到本地模式
     this.isCloudConnected = !CloudDBService.isDemoMode;
+
     this.isLoading = false;
   }
 
@@ -300,6 +304,17 @@ struct CloudDocsPage {
     .backgroundColor(this.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(10,89,247,0.04)')
   }
 
+  /**
+   * 获取过滤后的我文档列表(关键词搜索)
+   */
+  getFilteredDocs(): UserDocument[] {
+    let docs: UserDocument[] = this.myDocs;
+    if (this.searchKeyword.trim()) {
+      docs = SearchService.search(docs, this.searchKeyword);
+    }
+    return docs;
+  }
+
   @Builder
   TabButton(label: string, tabIndex: number, onClick: () => void) {
     Text(label)
@@ -330,7 +345,23 @@ struct CloudDocsPage {
             .onClick(() => { this.showImportDialog = true; })
         }
         .width('92%')
-        .margin({ bottom: 16 })
+        .margin({ bottom: 8 })
+
+        // 搜索框
+        Row({ space: 8 }) {
+          TextInput({ text: this.searchKeyword, placeholder: '搜索关键词...' })
+            .fontSize(14)
+            .height(36)
+            .layoutWeight(1)
+            .fontColor(this.isDark ? '#E5FFFFFF' : '#E5000000')
+            .placeholderColor(this.isDark ? '#66FFFFFF' : '#66000000')
+            .backgroundColor(this.isDark ? '#33FFFFFF' : '#0D000000')
+            .borderRadius(18)
+            .padding({ left: 16, right: 16 })
+            .onChange((v: string) => { this.searchKeyword = v; })
+        }
+        .width('92%')
+        .margin({ bottom: 8 })
 
         if (this.isLoading) {
           Column() {
@@ -359,10 +390,24 @@ struct CloudDocsPage {
                   .width('100%')
                   .padding({ top: 60 })
                   .alignItems(HorizontalAlign.Center)
+                } else if (this.getFilteredDocs().length === 0) {
+                  Column({ space: 8 }) {
+                    Text('🔍')
+                      .fontSize(40)
+                    Text('没有匹配的文档')
+                      .fontSize(15)
+                      .fontColor(this.isDark ? '#99FFFFFF' : '#99000000')
+                    Text('试试其他关键词')
+                      .fontSize(12)
+                      .fontColor(this.isDark ? '#66FFFFFF' : '#66000000')
+                  }
+                  .width('100%')
+                  .padding({ top: 60 })
+                  .alignItems(HorizontalAlign.Center)
                 } else {
-                  ForEach(this.myDocs, (doc: UserDocument) => {
+                  ForEach(this.getFilteredDocs(), (doc: UserDocument) => {
                     this.DocCard(doc, true)
-                  })
+                  }, (doc: UserDocument) => doc.id)
                 }
               } else {
                 if (this.sharedDocs.length === 0) {
