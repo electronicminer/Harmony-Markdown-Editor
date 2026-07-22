@@ -62,8 +62,6 @@ export class VersionService {
     doc.updatedAt = Long.fromNumber(Date.now());
     doc.isPublic = base.isPublic;
     doc.sharedWith = base.sharedWith;
-    doc.tags = base.tags;
-    doc.isEncrypted = base.isEncrypted;
     return doc;
   }
 

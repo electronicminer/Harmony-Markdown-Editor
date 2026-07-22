@@ -17,7 +17,6 @@ import { UserDocument } from '../models/UserDocument';
 import { ShareDialog } from '../components/ShareDialog';
 import { TemplateDialog } from '../components/TemplateDialog';
 import { NoteTemplate } from '../utils/NoteTemplates';
-import { TagEditor } from '../components/TagEditor';
 import { VersionHistoryDialog } from '../components/VersionHistoryDialog';
 import { ExportDialog } from '../components/ExportDialog';
 import { DocumentVersion } from '../models/DocumentVersion';
@@ -186,7 +185,6 @@ struct Editor {
   @State cloudDocId: string = '';
   @State isCloudSyncing: boolean = false;
   @State cloudDocForShare: UserDocument = new UserDocument();
-  @State cloudDocForTags: UserDocument = new UserDocument();
   @State versions: DocumentVersion[] = [];
   private versionDialogDoc: UserDocument = new UserDocument();
   private shareDialogController: CustomDialogController = new CustomDialogController({
@@ -245,19 +243,6 @@ struct Editor {
     promptAction.showToast({ message: '已插入模板', duration: 1200 });
   }
 
-  // 标签编辑对话框控制器
-  private tagEditorController: CustomDialogController = new CustomDialogController({
-    builder: TagEditor({
-      title: '笔记',
-      isDark: this.isDark,
-      historyTags: [],
-      onSave: (_tags: string) => {}
-    }),
-    autoCancel: true,
-    alignment: DialogAlignment.Center,
-    customStyle: true
-  });
-
   // 版本历史对话框控制器
   private versionHistoryController: CustomDialogController = new CustomDialogController({
     builder: VersionHistoryDialog({
@@ -305,76 +290,6 @@ struct Editor {
       const err: BusinessError = e as BusinessError;
       promptAction.showToast({ message: '导出失败: ' + err.message, duration: 2000 });
     }
-  }
-
-  /**
-   * 打开标签编辑:确保 cloudDocForTags 是当前文档的可编辑副本
-   */
-  async openTagEditor(): Promise<void> {
-    const context = getContext(this) as common.UIAbilityContext;
-    const doc = new UserDocument();
-    doc.id = this.cloudDocId || this.fileUri || 'local';
-    doc.content = this.markdownText;
-    doc.title = this.markdownText.split('\n')[0]?.replace(/^#+\s*/, '').trim() || 'Untitled';
-
-    // 本地优先读 tags(云端 schema 可能未同步 tags 字段,云端会丢失);
-    // 本地为空时再 fallback 到云端
-    const key: string = this.cloudDocId || this.fileUri || 'last_doc';
-    const localTags: string = await PreferencesUtil.getLocalTag(context, key);
-    if (localTags) {
-      doc.tags = localTags;
-    } else if (this.cloudDocId) {
-      const existing = await CloudDBService.getDocumentById(this.cloudDocId);
-      doc.tags = existing ? existing.tags : '';
-    } else {
-      doc.tags = '';
-    }
-    this.cloudDocForTags = doc;
-
-    const history = await PreferencesUtil.getTagHistory(context);
-    this.tagEditorController = new CustomDialogController({
-      builder: TagEditor({
-        title: this.cloudDocForTags.getDisplayTitle(),
-        initialTags: this.cloudDocForTags.tags,
-        isDark: this.isDark,
-        historyTags: history,
-        onSave: (tags: string) => {
-          this.cloudDocForTags.tags = tags;
-          this.onTagsSaved();
-        }
-      }),
-      autoCancel: true,
-      alignment: DialogAlignment.Center,
-      customStyle: true
-    });
-    this.tagEditorController.open();
-  }
-
-  /**
-   * 标签保存后:持久化到云端(有 cloudDocId)或本地偏好(无云端时)
-   */
-  async onTagsSaved(): Promise<void> {
-    const tags: string = this.cloudDocForTags.tags;
-    const context = getContext(this) as common.UIAbilityContext;
-    await PreferencesUtil.mergeTagHistory(context, this.cloudDocForTags.getTags());
-
-    // 有云端文档 → 存 Cloud DB
-    if (this.cloudDocId) {
-      const doc = await CloudDBService.getDocumentById(this.cloudDocId);
-      if (doc) {
-        doc.tags = tags;
-        await CloudDBService.saveDocument(doc);
-        // 本地也写一份,作为备份
-        await PreferencesUtil.saveLocalTag(context, this.cloudDocId, tags);
-        promptAction.showToast({ message: '标签已保存', duration: 1200 });
-        return;
-      }
-    }
-
-    // 无云端 → 存本地偏好(用 fileUri 或 cloudDocId 做 key)
-    const key: string = this.cloudDocId || this.fileUri || 'last_doc';
-    await PreferencesUtil.saveLocalTag(context, key, tags);
-    promptAction.showToast({ message: '标签已保存', duration: 1200 });
   }
 
   /**
@@ -1453,9 +1368,6 @@ struct Editor {
             })
             this.GlassIconButton('🔗', () => {
               this.openShareDialog()
-            })
-            this.GlassIconButton('🏷️', () => {
-              this.openTagEditor()
             })
             this.GlassIconButton('⏱️', () => {
               this.openVersionHistory()
