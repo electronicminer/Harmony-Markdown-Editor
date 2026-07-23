@@ -149,6 +149,14 @@ struct Editor {
   private webController: webview.WebviewController = new webview.WebviewController();
   @State selectionStart: number = 0
   @State selectionEnd: number = 0
+  // 查找与替换
+  @State showFindReplace: boolean = false
+  @State findText: string = ''
+  @State replaceText: string = ''
+  @State caseSensitive: boolean = false
+  @State matchCount: number = 0
+  @State matchIndex: number = -1
+  private matchStarts: number[] = []
   @State wordCount: number = 0
   @State charCount: number = 0
   @State autoSave: boolean = false
@@ -373,6 +381,230 @@ struct Editor {
     this.updateCounts(v.content);
     this.hasUnsavedChanges = true;
     promptAction.showToast({ message: '已恢复,记得保存', duration: 2000 });
+  }
+
+  // ==================== 查找与替换 ====================
+
+  openFindReplace(): void {
+    this.showFindReplace = true;
+    this.updateFindMatches();
+  }
+
+  closeFindReplace(): void {
+    this.showFindReplace = false;
+  }
+
+  /**
+   * 重建匹配位置列表(大小写可选),并跳到第一个
+   */
+  updateFindMatches(): void {
+    const needle: string = this.findText;
+    if (!needle) {
+      this.matchStarts = [];
+      this.matchCount = 0;
+      this.matchIndex = -1;
+      return;
+    }
+    const hay: string = this.caseSensitive ? this.markdownText : this.markdownText.toLowerCase();
+    const needleLow: string = this.caseSensitive ? needle : needle.toLowerCase();
+    const starts: number[] = [];
+    let from: number = 0;
+    while (from <= hay.length) {
+      const idx: number = hay.indexOf(needleLow, from);
+      if (idx < 0) {
+        break;
+      }
+      starts.push(idx);
+      from = idx + needleLow.length;
+    }
+    this.matchStarts = starts;
+    this.matchCount = starts.length;
+    this.matchIndex = starts.length > 0 ? 0 : -1;
+    this.jumpToCurrent();
+  }
+
+  jumpToCurrent(): void {
+    if (this.matchIndex >= 0 && this.matchIndex < this.matchStarts.length) {
+      this.controller.caretPosition(this.matchStarts[this.matchIndex]);
+    }
+  }
+
+  findNext(): void {
+    if (this.matchCount === 0) {
+      return;
+    }
+    this.matchIndex = (this.matchIndex + 1) % this.matchCount;
+    this.jumpToCurrent();
+  }
+
+  findPrev(): void {
+    if (this.matchCount === 0) {
+      return;
+    }
+    this.matchIndex = (this.matchIndex - 1 + this.matchCount) % this.matchCount;
+    this.jumpToCurrent();
+  }
+
+  /**
+   * 替换当前匹配,然后跳到下一个
+   */
+  replaceCurrent(): void {
+    if (this.matchIndex < 0 || this.matchIndex >= this.matchStarts.length || !this.findText) {
+      return;
+    }
+    const start: number = this.matchStarts[this.matchIndex];
+    const len: number = this.findText.length;
+    this.markdownText = this.markdownText.substring(0, start) + this.replaceText + this.markdownText.substring(start + len);
+    this.controller.caretPosition(start);
+    this.hasUnsavedChanges = true;
+    this.updateCounts(this.markdownText);
+    this.updateFindMatches();
+  }
+
+  /**
+   * 全部替换(手动遍历,兼容大小写,避免动态正则)
+   */
+  replaceAll(): void {
+    if (!this.findText) {
+      return;
+    }
+    const needle: string = this.caseSensitive ? this.findText : this.findText.toLowerCase();
+    const hay: string = this.caseSensitive ? this.markdownText : this.markdownText.toLowerCase();
+    let result: string = '';
+    let i: number = 0;
+    let count: number = 0;
+    while (i < this.markdownText.length) {
+      const idx: number = hay.indexOf(needle, i);
+      if (idx < 0) {
+        result += this.markdownText.substring(i);
+        break;
+      }
+      result += this.markdownText.substring(i, idx);
+      result += this.replaceText;
+      count++;
+      i = idx + needle.length;
+    }
+    this.markdownText = result;
+    this.hasUnsavedChanges = true;
+    this.updateCounts(this.markdownText);
+    this.matchStarts = [];
+    this.matchCount = 0;
+    this.matchIndex = -1;
+    promptAction.showToast({ message: `已替换 ${count} 处`, duration: 1500 });
+  }
+
+  @Builder
+  FindReplaceBar() {
+    Column({ space: 8 }) {
+      // 查找行
+      Row({ space: 8 }) {
+        TextInput({ text: this.findText, placeholder: '查找内容...' })
+          .fontSize(14)
+          .height(36)
+          .layoutWeight(1)
+          .fontColor(this.isDark ? '#E5FFFFFF' : '#E5000000')
+          .placeholderColor(this.isDark ? '#66FFFFFF' : '#66000000')
+          .backgroundColor(this.isDark ? '#33FFFFFF' : '#0D000000')
+          .borderRadius(10)
+          .padding({ left: 12, right: 12 })
+          .onChange((v: string) => {
+            this.findText = v;
+            this.updateFindMatches();
+          })
+
+        Text(this.matchCount === 0 ? (this.findText ? '无匹配' : '') : `${this.matchIndex + 1}/${this.matchCount}`)
+          .fontSize(12)
+          .fontColor(this.isDark ? '#99FFFFFF' : '#99000000')
+          .width(54)
+          .textAlign(TextAlign.Center)
+
+        Button('↑')
+          .fontSize(16)
+          .height(32)
+          .width(32)
+          .padding(0)
+          .backgroundColor(this.isDark ? '#33FFFFFF' : '#0D000000')
+          .fontColor(this.isDark ? '#E5FFFFFF' : '#E5000000')
+          .borderRadius(8)
+          .onClick(() => this.findPrev())
+        Button('↓')
+          .fontSize(16)
+          .height(32)
+          .width(32)
+          .padding(0)
+          .backgroundColor(this.isDark ? '#33FFFFFF' : '#0D000000')
+          .fontColor(this.isDark ? '#E5FFFFFF' : '#E5000000')
+          .borderRadius(8)
+          .onClick(() => this.findNext())
+      }
+      .width('100%')
+
+      // 替换行
+      Row({ space: 8 }) {
+        TextInput({ text: this.replaceText, placeholder: '替换为...' })
+          .fontSize(14)
+          .height(36)
+          .layoutWeight(1)
+          .fontColor(this.isDark ? '#E5FFFFFF' : '#E5000000')
+          .placeholderColor(this.isDark ? '#66FFFFFF' : '#66000000')
+          .backgroundColor(this.isDark ? '#33FFFFFF' : '#0D000000')
+          .borderRadius(10)
+          .padding({ left: 12, right: 12 })
+          .onChange((v: string) => {
+            this.replaceText = v;
+          })
+
+        Button('替换')
+          .fontSize(12)
+          .height(32)
+          .padding({ left: 10, right: 10 })
+          .fontColor('#0A59F7')
+          .backgroundColor('rgba(10,89,247,0.1)')
+          .borderRadius(8)
+          .onClick(() => this.replaceCurrent())
+        Button('全部')
+          .fontSize(12)
+          .height(32)
+          .padding({ left: 10, right: 10 })
+          .fontColor(Color.White)
+          .backgroundColor('#0A59F7')
+          .borderRadius(8)
+          .onClick(() => this.replaceAll())
+        Button('✕')
+          .fontSize(14)
+          .height(32)
+          .width(32)
+          .padding(0)
+          .backgroundColor(this.isDark ? '#33FFFFFF' : '#0D000000')
+          .fontColor(this.isDark ? '#E5FFFFFF' : '#E5000000')
+          .borderRadius(8)
+          .onClick(() => this.closeFindReplace())
+      }
+      .width('100%')
+
+      // 选项行
+      Row({ space: 16 }) {
+        Row({ space: 6 }) {
+          Toggle({ type: ToggleType.Checkbox, isOn: this.caseSensitive })
+            .onChange((on: boolean) => {
+              this.caseSensitive = on;
+              this.updateFindMatches();
+            })
+            .width(18)
+            .height(18)
+          Text('区分大小写')
+            .fontSize(12)
+            .fontColor(this.isDark ? '#99FFFFFF' : '#99000000')
+        }
+        .alignItems(VerticalAlign.Center)
+      }
+      .width('100%')
+    }
+    .width('100%')
+    .padding(12)
+    .borderRadius(14)
+    .backgroundColor(this.isDark ? 'rgba(36,36,36,0.95)' : 'rgba(255,255,255,0.98)')
+    .backdropBlur(40)
   }
 
   onTemplateSelected(t: NoteTemplate): void {
@@ -1085,6 +1317,18 @@ struct Editor {
 
   build() {
     Stack({ alignContent: Alignment.Top }) {
+      // 查找替换浮层(浮在工具栏下方,zIndex 高于工具栏)
+      if (this.showFindReplace) {
+        Row() {
+          this.FindReplaceBar()
+        }
+        .width('100%')
+        .padding({ left: 16, right: 16 })
+        .position({ x: 0, y: 92 })
+        .justifyContent(FlexAlign.Center)
+        .zIndex(20)
+      }
+
       // 底层：真正的编辑器主体，全屏显示，由内部控制文字的初始下沉
       Column() {
         // 编辑器和预览区域 + AI 面板（三分屏布局，带拖拽分隔线）
@@ -1423,6 +1667,9 @@ struct Editor {
             })
             this.GlassIconButton('⏱️', () => {
               this.openVersionHistory()
+            })
+            this.GlassIconButton('🔍', () => {
+              this.openFindReplace()
             })
             this.GlassIconButton(this.isDark ? '☀️' : '🌙', () => {
               const context = getContext(this) as common.UIAbilityContext;
