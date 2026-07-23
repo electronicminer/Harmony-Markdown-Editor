@@ -1,6 +1,5 @@
 import { ChatMessage, AIService, AIResponse, AgentPlan, AgentStep } from '../utils/AIService';
 import { AIConfigClass, AIConfig } from '../utils/AIConfig';
-import { Markdown } from '@lidary/markdown';
 import { pickImageAsDataUrl } from '../utils/ImageUtil';
 import { common, abilityAccessCtrl } from '@kit.AbilityKit';
 import { promptAction } from '@kit.ArkUI';
@@ -418,17 +417,14 @@ export struct AIChatPanel {
                 }
                 .width('100%')
               } else {
-                // AI 消息 - 左侧,Markdown 渲染 + 操作按钮
+                // AI 消息 - 左侧,纯文本显示 + 操作按钮
                 Column({ space: 6 }) {
                   Row() {
                     Column() {
-                      Markdown({
-                        content: item.content,
-                        options: {
-                          darkMode: this.isDark,
-                          options: { gfm: true }
-                        }
-                      })
+                      Text(item.content || '')
+                        .fontSize(14)
+                        .lineHeight(20)
+                        .fontColor(this.isDark ? '#E5FFFFFF' : '#E5000000')
                         .width('100%')
                     }
                     .padding({ left: 14, right: 14, top: 10, bottom: 10 })
