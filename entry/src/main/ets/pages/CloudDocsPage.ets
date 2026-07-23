@@ -4,6 +4,9 @@ import { AuthService } from '../utils/AuthService';
 import { CloudDBService } from '../utils/CloudDBService';
 import { UserDocument } from '../models/UserDocument';
 import { ShareDialog } from '../components/ShareDialog';
+import { SearchService } from '../utils/SearchService';
+import { common } from '@kit.AbilityKit';
+import { VersionService } from '../utils/VersionService';
 
 // #8 删除确认对话框（风格对齐 ShareDialog）
 @CustomDialog
@@ -70,6 +73,7 @@ struct CloudDocsPage {
   @State selectedDoc: UserDocument = new UserDocument();
   // #8 删除目标文档（在打开确认对话框前设置）
   @State deleteTargetDoc: UserDocument = new UserDocument();
+  @State searchKeyword: string = '';
 
   private shareDialogController: CustomDialogController = new CustomDialogController({
     builder: ShareDialog({
@@ -196,6 +200,9 @@ struct CloudDocsPage {
   async deleteDocument(doc: UserDocument): Promise<void> {
     const result = await CloudDBService.deleteDocument(doc);
     if (result.success) {
+      // 清掉该文档的本地版本历史(纯本地清理,不改云端逻辑)
+      const context = getContext(this) as common.UIAbilityContext;
+      VersionService.clearVersions(context, doc.id);
       promptAction.showToast({ message: result.message, duration: 1500 });
       await this.loadDocuments();
     } else {
@@ -206,6 +213,17 @@ struct CloudDocsPage {
   openShareDialog(doc: UserDocument): void {
     this.selectedDoc = doc;
     this.shareDialogController.open();
+  }
+
+  /**
+   * 获取过滤后的文档列表(按关键词搜索,作用于当前 tab)
+   */
+  getFilteredDocs(): UserDocument[] {
+    const source: UserDocument[] = this.activeTab === 0 ? this.myDocs : this.sharedDocs;
+    if (this.searchKeyword.trim()) {
+      return SearchService.search(source, this.searchKeyword);
+    }
+    return source;
   }
 
   @Builder
@@ -332,6 +350,22 @@ struct CloudDocsPage {
         .width('92%')
         .margin({ bottom: 16 })
 
+        // 搜索框
+        Row({ space: 8 }) {
+          TextInput({ text: this.searchKeyword, placeholder: '搜索标题或正文...' })
+            .fontSize(14)
+            .height(36)
+            .layoutWeight(1)
+            .fontColor(this.isDark ? '#E5FFFFFF' : '#E5000000')
+            .placeholderColor(this.isDark ? '#66FFFFFF' : '#66000000')
+            .backgroundColor(this.isDark ? '#33FFFFFF' : '#0D000000')
+            .borderRadius(18)
+            .padding({ left: 16, right: 16 })
+            .onChange((v: string) => { this.searchKeyword = v; })
+        }
+        .width('92%')
+        .margin({ bottom: 12 })
+
         if (this.isLoading) {
           Column() {
             LoadingProgress()
@@ -359,8 +393,22 @@ struct CloudDocsPage {
                   .width('100%')
                   .padding({ top: 60 })
                   .alignItems(HorizontalAlign.Center)
+                } else if (this.getFilteredDocs().length === 0) {
+                  Column({ space: 8 }) {
+                    Text('🔍')
+                      .fontSize(40)
+                    Text('未找到匹配的文档')
+                      .fontSize(15)
+                      .fontColor(this.isDark ? '#99FFFFFF' : '#99000000')
+                    Text('换个关键词试试')
+                      .fontSize(12)
+                      .fontColor(this.isDark ? '#66FFFFFF' : '#66000000')
+                  }
+                  .width('100%')
+                  .padding({ top: 60 })
+                  .alignItems(HorizontalAlign.Center)
                 } else {
-                  ForEach(this.myDocs, (doc: UserDocument) => {
+                  ForEach(this.getFilteredDocs(), (doc: UserDocument) => {
                     this.DocCard(doc, true)
                   })
                 }
@@ -379,8 +427,22 @@ struct CloudDocsPage {
                   .width('100%')
                   .padding({ top: 60 })
                   .alignItems(HorizontalAlign.Center)
+                } else if (this.getFilteredDocs().length === 0) {
+                  Column({ space: 8 }) {
+                    Text('🔍')
+                      .fontSize(40)
+                    Text('未找到匹配的文档')
+                      .fontSize(15)
+                      .fontColor(this.isDark ? '#99FFFFFF' : '#99000000')
+                    Text('换个关键词试试')
+                      .fontSize(12)
+                      .fontColor(this.isDark ? '#66FFFFFF' : '#66000000')
+                  }
+                  .width('100%')
+                  .padding({ top: 60 })
+                  .alignItems(HorizontalAlign.Center)
                 } else {
-                  ForEach(this.sharedDocs, (doc: UserDocument) => {
+                  ForEach(this.getFilteredDocs(), (doc: UserDocument) => {
                     this.DocCard(doc, false)
                   })
                 }

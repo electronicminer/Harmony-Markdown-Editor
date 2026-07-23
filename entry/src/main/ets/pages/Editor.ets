@@ -19,6 +19,9 @@ import { TemplateDialog } from '../components/TemplateDialog';
 import { NoteTemplate } from '../utils/NoteTemplates';
 import { ExportDialog } from '../components/ExportDialog';
 import { ExportService, ExportFormat } from '../utils/ExportService';
+import { VersionHistoryDialog } from '../components/VersionHistoryDialog';
+import { DocumentVersion } from '../models/DocumentVersion';
+import { VersionService } from '../utils/VersionService';
 import Long from 'long';
 // 自动补全功能导入（已注释）
 // import { CompletionItem, filterCompletions, checkTrigger, TriggerInfo, CompletionItemType } from '../utils/MarkdownCompletions';
@@ -182,6 +185,7 @@ struct Editor {
   @State cloudDocId: string = '';
   @State isCloudSyncing: boolean = false;
   @State cloudDocForShare: UserDocument = new UserDocument();
+  @State versions: DocumentVersion[] = [];
   private shareDialogController: CustomDialogController = new CustomDialogController({
     builder: ShareDialog({
       doc: this.cloudDocForShare,
@@ -266,6 +270,109 @@ struct Editor {
       const err: BusinessError = e as BusinessError;
       promptAction.showToast({ message: '导出失败: ' + err.message, duration: 2000 });
     }
+  }
+
+  // 版本历史对话框控制器(打开时重建,注入最新版本列表)
+  private versionHistoryController: CustomDialogController = new CustomDialogController({
+    builder: VersionHistoryDialog({
+      isDark: this.isDark,
+      versions: this.versions,
+      onRestore: (v: DocumentVersion) => {
+        this.restoreVersion(v);
+      }
+    }),
+    autoCancel: true,
+    alignment: DialogAlignment.Center,
+    customStyle: true
+  });
+
+  // 版本快照限频:同一文档至少间隔 2 分钟才存一版(离开页面时强制存,不限频)
+  private versionThrottleMs: number = 120000;
+  private lastVersionDocId: string = '';
+  private lastVersionTime: number = 0;
+
+  /**
+   * 取当前文档的本地版本 key:云端文档用 cloudDocId,本地文件用 fileUri。
+   * 仅作为本地文件命名,不调用任何云端接口。
+   */
+  getVersionDocId(): string {
+    if (this.cloudDocId) {
+      return this.cloudDocId;
+    }
+    if (this.fileUri) {
+      return this.fileUri;
+    }
+    return '';
+  }
+
+  /**
+   * 存一份版本快照。force=true 跳过限频(离开页面时用),但仍去重。
+   */
+  async captureVersion(force: boolean): Promise<void> {
+    try {
+      const docId: string = this.getVersionDocId();
+      if (!docId) {
+        return;
+      }
+      // 限频(非强制)
+      if (!force && this.lastVersionDocId === docId && (Date.now() - this.lastVersionTime) < this.versionThrottleMs) {
+        return;
+      }
+      const context = getContext(this) as common.UIAbilityContext;
+      const list: DocumentVersion[] = await VersionService.listVersions(context, docId);
+      // 去重:内容与最新版一致则跳过
+      if (list.length > 0 && list[0].content === this.markdownText) {
+        this.lastVersionDocId = docId;
+        this.lastVersionTime = Date.now();
+        return;
+      }
+      const doc: UserDocument = new UserDocument();
+      doc.id = docId;
+      doc.content = this.markdownText;
+      doc.title = this.markdownText.split('\n')[0]?.replace(/^#+\s*/, '').trim() || 'Untitled';
+      await VersionService.saveVersion(context, doc);
+      this.lastVersionDocId = docId;
+      this.lastVersionTime = Date.now();
+    } catch (e) {
+      console.error('[Version] captureVersion failed: ' + (e as Error).message);
+    }
+  }
+
+  /**
+   * 打开版本历史对话框
+   */
+  async openVersionHistory(): Promise<void> {
+    const docId: string = this.getVersionDocId();
+    if (!docId) {
+      promptAction.showToast({ message: '请先保存(本地文件或云端)后再查看历史', duration: 2000 });
+      return;
+    }
+    const context = getContext(this) as common.UIAbilityContext;
+    this.versions = await VersionService.listVersions(context, docId);
+    this.versionHistoryController = new CustomDialogController({
+      builder: VersionHistoryDialog({
+        isDark: this.isDark,
+        versions: this.versions,
+        onRestore: (v: DocumentVersion) => {
+          this.restoreVersion(v);
+        }
+      }),
+      autoCancel: true,
+      alignment: DialogAlignment.Center,
+      customStyle: true
+    });
+    this.versionHistoryController.open();
+  }
+
+  /**
+   * 恢复某个历史版本:用其内容覆盖当前编辑器
+   */
+  async restoreVersion(v: DocumentVersion): Promise<void> {
+    this.markdownText = v.content;
+    this.recordHistory(v.content);
+    this.updateCounts(v.content);
+    this.hasUnsavedChanges = true;
+    promptAction.showToast({ message: '已恢复,记得保存', duration: 2000 });
   }
 
   onTemplateSelected(t: NoteTemplate): void {
@@ -423,6 +530,8 @@ struct Editor {
         this.performAutoSave();
       }
     }
+    // 离开页面时存一份版本快照(强制,不限频,去重)
+    this.captureVersion(true);
   }
 
   startAutoSave() {
@@ -464,6 +573,8 @@ struct Editor {
       this.saveDocument(true);
       this.saveStatus = `已自动保存 ${this.nowTimeStr()}`;
     }
+    // 自动保存时顺便存版本快照(限频去重,见 captureVersion)
+    this.captureVersion(false);
   }
 
   loadDocument() {
@@ -621,6 +732,8 @@ struct Editor {
 
       this.hasUnsavedChanges = false; // #1 reset dirty flag
       this.saveStatus = `已保存 ${this.nowTimeStr()}`;
+      // 本地保存成功,存一份版本快照
+      this.captureVersion(true);
 
       promptAction.showToast({
         message: '保存成功',
@@ -688,6 +801,11 @@ struct Editor {
         const context = getContext(this) as common.UIAbilityContext;
         PreferencesUtil.saveCloudDocId(context, this.fileUri, savedDoc.id);
       }
+      // 云端保存成功:重置未保存标志 + 存一份本地版本快照
+      // (只读写本地文件 + 重置 UI 标志,不改 CloudDBService 调用与云端逻辑)
+      this.hasUnsavedChanges = false;
+      this.saveStatus = `已云端保存 ${this.nowTimeStr()}`;
+      this.captureVersion(true);
       promptAction.showToast({ message: result.message, duration: 1500 });
     } else {
       promptAction.showToast({ message: result.message, duration: 2000 });
@@ -1302,6 +1420,9 @@ struct Editor {
             })
             this.GlassIconButton('🔗', () => {
               this.openShareDialog()
+            })
+            this.GlassIconButton('⏱️', () => {
+              this.openVersionHistory()
             })
             this.GlassIconButton(this.isDark ? '☀️' : '🌙', () => {
               const context = getContext(this) as common.UIAbilityContext;
