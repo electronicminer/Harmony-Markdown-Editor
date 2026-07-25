@@ -3,6 +3,7 @@
     "products": [
       {
         "name": "default",
+        "signingConfig": "default",
         "compatibleSdkVersion": "5.0.3(15)",
         "runtimeOS": "HarmonyOS",
         "buildOption": {
@@ -21,7 +22,21 @@
         "name": "release"
       }
     ],
-    "signingConfigs": []
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "C:\\Users\\Administrator\\.ohos\\config\\default_Harmony-Markdown-Editor_BF9c_9PfEEqvsrYni1LXCnlabL8YqIz-_1EZEhPgKAk=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001B5F37F32DA9F0E75E6BE7FCCD098E1237C565EEBBE64D59CF14BD9BA66DF2AD60F8D03F8357A94C",
+          "profile": "C:\\Users\\Administrator\\.ohos\\config\\default_Harmony-Markdown-Editor_BF9c_9PfEEqvsrYni1LXCnlabL8YqIz-_1EZEhPgKAk=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "C:\\Users\\Administrator\\.ohos\\config\\default_Harmony-Markdown-Editor_BF9c_9PfEEqvsrYni1LXCnlabL8YqIz-_1EZEhPgKAk=.p12",
+          "storePassword": "0000001B353022E038A325514BF805341CB6FE0A99F3C4FA29B6343ED610D4EA9BB6239299B931FF980FDE"
+        }
+      }
+    ]
   },
   "modules": [
     {
@@ -39,6 +54,14 @@
     {
       "name": "Markdown",
       "srcPath": "./Markdown",
+      "targets": [
+        {
+          "name": "default",
+          "applyToProducts": [
+            "default"
+          ]
+        }
+      ]
     }
   ]
 }
