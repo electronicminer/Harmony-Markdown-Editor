@@ -7,6 +7,10 @@
 [![Language](https://img.shields.io/badge/Language-ArkTS-purple?style=flat-square)](https://developer.harmonyos.com/cn/docs/documentation/doc-guides/arkts-overview-0000001828699769)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
+<img src="https://visitor-badge.laobi.icu/badge?page_id=electronicminer.Harmony-Markdown-Editor" alt="Visitor Badge" />
+<img src="https://img.shields.io/github/stars/electronicminer/Harmony-Markdown-Editor?style=social" alt="GitHub stars" />
+
+
 **基于 HarmonyOS NEXT 的原生 Markdown 编辑器** — ArkUI 原生渲染，集成 AI 写作助手与华为云同步
 
 </div>
