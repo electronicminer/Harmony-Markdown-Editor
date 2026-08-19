@@ -4,7 +4,7 @@
  * @Description:
  */
 import { MarkdownTheme } from '../config/MarkdownTheme'
-import { markdown } from '../Index'
+import { markdown, MarkdownOptionsClass } from '../Index'
 import { clearMarkdown, latexToPixelMap } from '../utils'
 import { Token } from './Tokens'
 import { LengthMetrics } from '@kit.ArkUI'
@@ -17,6 +17,9 @@ export interface InlineParams {
   isLink?: boolean
   fontWeight?: FontWeight,
   onSpanClick?: () => void
+  // 所属 Markdown 组件实例的 options，携带 linkClick/imageClick 等回调，
+  // 避免多实例共用模块级回调时互相覆盖
+  options?: MarkdownOptionsClass
 }
 
 export async function parseInlineToken(params: InlineParams): Promise<MutableStyledString | undefined> {
@@ -41,7 +44,7 @@ export async function parseInlineToken(params: InlineParams): Promise<MutableSty
           styledKey: StyledStringKey.GESTURE,
           styledValue: new GestureStyle({
             onClick: () => {
-              markdown.registerImageClick?.(tokenItem['href'])
+              (params.options?.imageClick ?? markdown.registerImageClick)?.(tokenItem['href'])
             }
           })
         })
@@ -58,7 +61,8 @@ export async function parseInlineToken(params: InlineParams): Promise<MutableSty
           fontWeight: FontWeight.Bold,
           isLink: params.isLink,
           uiContext: params.uiContext,
-          onSpanClick: params.onSpanClick
+          onSpanClick: params.onSpanClick,
+          options: params.options
         })
       } else {
         let text = clearMarkdown(tokenItem.text)
@@ -169,8 +173,9 @@ export async function parseInlineToken(params: InlineParams): Promise<MutableSty
         uiContext: params.uiContext,
         isLink: true,
         onSpanClick: () => {
-          markdown.registerLinkClick?.(tokenItem['href'])
-        }
+          (params.options?.linkClick ?? markdown.registerLinkClick)?.(tokenItem['href'])
+        },
+        options: params.options
       })
     } else if (tokenItem.type === 'sup' || tokenItem.type === 'sub') {
       if (tokenItem.tokens?.length != 0) {
@@ -229,7 +234,7 @@ export async function parseInlineToken(params: InlineParams): Promise<MutableSty
       // let text = await StyledString.fromHtml(tokenItem.text)
       // this.inlineTextStyle.appendStyledString(text)
     } else {
-      markdown.customInlineBuilder?.(tokenItem, params)
+      (params.options?.customInlineBuilder ?? markdown.customInlineBuilder)?.(tokenItem, params)
     }
   }
   return params.inlineTextStyle

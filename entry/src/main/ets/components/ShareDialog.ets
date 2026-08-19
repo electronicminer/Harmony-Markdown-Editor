@@ -8,11 +8,34 @@ export struct ShareDialog {
   private static readonly EMAIL_REGEX: RegExp = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   controller: CustomDialogController;
-  @Link doc: UserDocument;
+  // @Watch：对话框控制器只构建一次，父页面换绑不同文档时刷新快照
+  @Link @Watch('onDocChanged') doc: UserDocument;
   @Link isDark: boolean;
   @State shareEmail: string = '';
   @State isSaving: boolean = false;
   onRefresh: () => void = () => {};
+  // 打开/换绑时的分享状态快照：取消时回滚，避免未保存的修改
+  // （isPublic/sharedWith 经 @Link 立即写入调用方的 doc）污染调用方状态
+  private originalIsPublic: boolean = false;
+  private originalSharedWith: string = '';
+
+  aboutToAppear(): void {
+    this.snapshotDocState();
+  }
+
+  onDocChanged(): void {
+    this.snapshotDocState();
+  }
+
+  private snapshotDocState(): void {
+    this.originalIsPublic = this.doc.isPublic;
+    this.originalSharedWith = this.doc.sharedWith;
+  }
+
+  private rollbackDocState(): void {
+    this.doc.isPublic = this.originalIsPublic;
+    this.doc.sharedWith = this.originalSharedWith;
+  }
 
   private isValidEmail(email: string): boolean {
     return ShareDialog.EMAIL_REGEX.test(email);
@@ -184,7 +207,10 @@ export struct ShareDialog {
           .type(ButtonType.Capsule)
           .height(44)
           .layoutWeight(1)
-          .onClick(() => this.controller.close())
+          .onClick(() => {
+            this.rollbackDocState();
+            this.controller.close();
+          })
 
         Button(this.isSaving ? '保存中...' : '保存设置')
           .fontSize(15)
@@ -196,14 +222,20 @@ export struct ShareDialog {
           .shadow({ radius: 12, color: 'rgba(10,89,247,0.3)', offsetY: 4 })
           .onClick(async () => {
             this.isSaving = true;
-            const result = await CloudDBService.updateSharing(this.doc);
-            this.isSaving = false;
-            if (result.success) {
-              promptAction.showToast({ message: '分享设置已保存', duration: 1500 });
-              this.onRefresh();
-              this.controller.close();
-            } else {
-              promptAction.showToast({ message: result.message, duration: 2000 });
+            try {
+              const result = await CloudDBService.updateSharing(this.doc);
+              if (result.success) {
+                // 保存成功后更新快照，避免后续取消误回滚到旧值
+                this.originalIsPublic = this.doc.isPublic;
+                this.originalSharedWith = this.doc.sharedWith;
+                promptAction.showToast({ message: '分享设置已保存', duration: 1500 });
+                this.onRefresh();
+                this.controller.close();
+              } else {
+                promptAction.showToast({ message: result.message, duration: 2000 });
+              }
+            } finally {
+              this.isSaving = false;
             }
           })
       }

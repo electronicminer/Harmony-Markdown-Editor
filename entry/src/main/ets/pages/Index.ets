@@ -604,6 +604,17 @@ struct Index {
         this.fileUri = params['uri'] as string;
       }
     }
+    // Editor 返回后同步最新内容（router.back 的 params 不可靠，由 Editor 写入 AppStorage）
+    const lastContent = AppStorage.get<string>('editor_last_content');
+    if (lastContent !== undefined) {
+      this.text = lastContent;
+      AppStorage.delete('editor_last_content');
+    }
+    const lastUri = AppStorage.get<string>('editor_last_uri');
+    if (lastUri !== undefined && lastUri !== '') {
+      this.fileUri = lastUri;
+      AppStorage.delete('editor_last_uri');
+    }
   }
 
   readFile(context: common.UIAbilityContext) {

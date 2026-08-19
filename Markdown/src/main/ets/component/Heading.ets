@@ -26,6 +26,7 @@ export struct Heading {
         token: this.token?.tokens ?? [],
         uiContext: this.getUIContext(),
         theme: this.options.theme,
+        options: this.options
         // fontStyle: this.options.theme.headingStyle?.[this.token.depth]!
       }).then((data) => {
         try {

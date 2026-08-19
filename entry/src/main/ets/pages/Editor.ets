@@ -211,9 +211,13 @@ struct Editor {
       isDark: this.isDark,
       onSaveAndExit: () => {
         this.saveDocument(true);
+        this.syncContentToIndex();
         router.back();
       },
       onDiscardAndExit: () => {
+        // 放弃修改：清除同步标记，避免 Index 拿到已丢弃的内容
+        AppStorage.delete('editor_last_content');
+        AppStorage.delete('editor_last_uri');
         router.back();
       }
     }),
@@ -628,9 +632,12 @@ struct Editor {
 
   aboutToAppear(): void {
     const params = router.getParams() as Record<string, Object>;
+    // 显式传入空内容（如新建的空云端文档）有效，不能用 truthy 判断
+    let hasContentParam: boolean = false;
     if (params) {
-      if (params['content']) {
+      if (params['content'] !== undefined && params['content'] !== null) {
         this.markdownText = params['content'] as string;
+        hasContentParam = true;
       }
       if (params['uri']) {
         this.fileUri = params['uri'] as string;
@@ -678,8 +685,9 @@ struct Editor {
       }
     })
     
-    if (!this.markdownText || this.markdownText === '# Hello World\n\nStart writing your Markdown here...') {
-       // 初始化时尝试加载保存的文档，如果没有则加载默认文档
+    if (!hasContentParam || this.markdownText === '# Hello World\n\nStart writing your Markdown here...') {
+       // 未传内容参数时尝试加载保存的文档，如果没有则加载默认文档；
+       // 传入空内容（空云端文档）时保持为空，避免本地草稿覆盖云端文档
        this.loadDocument()
     } else {
       this.updateCounts(this.markdownText);
@@ -903,7 +911,30 @@ struct Editor {
       return true; // 阻止默认返回行为
     }
     this.saveDocument(true);
+    this.syncContentToIndex();
     return false;
+  }
+
+  // 将编辑后的最新内容同步回 Index 页。
+  // router.back({ params }) 的参数无法在目标页通过 router.getParams() 获取，改用 AppStorage 传递。
+  // 仅同步本地文件会话（有 fileUri），避免云文档/新建文档内容与 Index 的 fileUri 配对错乱。
+  private syncContentToIndex() {
+    if (!this.fileUri) {
+      return;
+    }
+    AppStorage.setOrCreate('editor_last_content', this.markdownText);
+    AppStorage.setOrCreate('editor_last_uri', this.fileUri);
+  }
+
+  // 页面内返回按钮与系统返回保持同一出口：有未保存更改先弹确认框
+  private exitWithConfirm() {
+    if (this.hasUnsavedChanges) {
+      this.exitConfirmController.open();
+      return;
+    }
+    this.saveDocument(true);
+    this.syncContentToIndex();
+    router.back();
   }
 
   // #1, #3 原子写保存文档（本地内部存储）
@@ -1562,13 +1593,7 @@ struct Editor {
           // 左侧：返回按钮 + Editor 标签
           Row({ space: 8 }) {
             this.GlassIconButton('‹', () => {
-              router.back({
-                url: 'pages/Index',
-                params: {
-                  content: this.markdownText,
-                  uri: this.fileUri
-                }
-              })
+              this.exitWithConfirm();
             }, 30)
 
             Text('Editor')

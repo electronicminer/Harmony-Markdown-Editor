@@ -1,5 +1,7 @@
 import { preferences } from '@kit.ArkData';
 import { common } from '@kit.AbilityKit';
+import { asset } from '@kit.AssetStoreKit';
+import { util } from '@kit.ArkTS';
 
 export class PreferencesUtil {
   private static readonly PREFERENCES_NAME = 'HMarkdownPrefs';
@@ -10,13 +12,16 @@ export class PreferencesUtil {
   private static readonly KEY_AUTO_SAVE_INTERVAL = 'autoSaveInterval';
   private static readonly KEY_DEFAULT_VIEW_MODE = 'defaultViewMode';
   private static readonly KEY_FOLLOW_SYSTEM = 'followSystem';
-  
+
   // AI Config Keys
   private static readonly KEY_AI_API_URL = 'aiApiUrl';
-  private static readonly KEY_AI_API_KEY = 'aiApiKey';
+  private static readonly KEY_AI_API_KEY = 'aiApiKey'; // 旧版明文存储的遗留键，仅在迁移时读取后删除
   private static readonly KEY_AI_MODEL = 'aiModel';
   private static readonly KEY_AI_SYSTEM_PROMPT = 'aiSystemPrompt';
   private static readonly KEY_AI_ENABLED = 'aiEnabled';
+
+  // Asset Store 中 API Key 的别名（Asset 数据不随系统备份导出）
+  private static readonly ASSET_ALIAS_AI_API_KEY = 'HMarkdown_ai_api_key';
 
   // Cloud Doc Map Key（本地文件URI → 云端文档ID 映射）
   private static readonly KEY_CLOUD_DOC_MAP = 'cloudDocMap';
@@ -153,15 +158,64 @@ export class PreferencesUtil {
     return await prefs.get(PreferencesUtil.KEY_AI_API_URL, '') as string;
   }
   
+  // API Key 属敏感凭据：改用 Asset Store Kit 存储（系统加密且不随备份导出），
+  // 不再写入明文 Preferences（旧值在首次读取时自动迁移并删除）。
   static async saveAIConfigApiKey(context: common.UIAbilityContext, key: string) {
-    const prefs = await PreferencesUtil.getPreferences(context);
-    await prefs.put(PreferencesUtil.KEY_AI_API_KEY, key);
-    await prefs.flush();
+    const encoder = util.TextEncoder.create('utf-8');
+    const query: asset.AssetMap = new Map();
+    query.set(asset.Tag.ALIAS, PreferencesUtil.ASSET_ALIAS_AI_API_KEY);
+    try {
+      if (!key) {
+        // 清空则移除资产
+        try {
+          await asset.remove(query);
+        } catch (e) {
+          // 资产本就不存在，忽略
+        }
+        return;
+      }
+      const secret: Uint8Array = encoder.encodeInto(key);
+      const attrs: asset.AssetMap = new Map();
+      attrs.set(asset.Tag.ALIAS, PreferencesUtil.ASSET_ALIAS_AI_API_KEY);
+      attrs.set(asset.Tag.SECRET, secret);
+      try {
+        await asset.add(attrs);
+      } catch (e) {
+        // 已存在同名资产则改为更新
+        const updateAttrs: asset.AssetMap = new Map();
+        updateAttrs.set(asset.Tag.SECRET, secret);
+        await asset.update(query, updateAttrs);
+      }
+    } catch (e) {
+      console.error('[Preferences] saveAIConfigApiKey to asset store failed: ' + JSON.stringify(e));
+    }
   }
-  
+
   static async getAIConfigApiKey(context: common.UIAbilityContext): Promise<string> {
-    const prefs = await PreferencesUtil.getPreferences(context);
-    return await prefs.get(PreferencesUtil.KEY_AI_API_KEY, '') as string;
+    const query: asset.AssetMap = new Map();
+    query.set(asset.Tag.ALIAS, PreferencesUtil.ASSET_ALIAS_AI_API_KEY);
+    try {
+      const res: asset.AssetMap[] = await asset.query(query);
+      if (res && res.length > 0) {
+        const secret = res[0].get(asset.Tag.SECRET) as Uint8Array;
+        return util.TextDecoder.create('utf-8').decodeWithStream(secret);
+      }
+    } catch (e) {
+      // 资产不存在等，走旧数据迁移
+    }
+    // 迁移：旧版本将 API Key 明文存于 Preferences，读到后写入 Asset 并删除明文
+    try {
+      const prefs = await PreferencesUtil.getPreferences(context);
+      const legacy = await prefs.get(PreferencesUtil.KEY_AI_API_KEY, '') as string;
+      if (legacy) {
+        await PreferencesUtil.saveAIConfigApiKey(context, legacy);
+        await prefs.delete(PreferencesUtil.KEY_AI_API_KEY);
+        await prefs.flush();
+      }
+      return legacy;
+    } catch (e) {
+      return '';
+    }
   }
   
   static async saveAIConfigModel(context: common.UIAbilityContext, model: string) {

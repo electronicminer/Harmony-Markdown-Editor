@@ -42,9 +42,34 @@ export class ExportService {
 
     const uri: string = result[0];
     const file = fs.openSync(uri, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
-    fs.writeSync(file.fd, output);
-    fs.closeSync(file);
+    try {
+      fs.writeSync(file.fd, output);
+    } finally {
+      fs.closeSync(file);
+    }
     return true;
+  }
+
+  /**
+   * HTML 导出消毒：marked 会原样透传 Markdown 中的原始 HTML，
+   * <script>/事件属性/javascript: 链接会随导出文件在浏览器执行，需先清理。
+   * 采用标签级黑名单 + 属性过滤（非完整 HTML 解析器，作为纵深防御使用）。
+   */
+  private static sanitizeHtml(html: string): string {
+    // 1) 整块移除危险标签及其内容（含未闭合的）
+    let out: string = html
+      .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '')
+      .replace(/<script\b[^>]*>[\s\S]*$/gi, '');
+    // 2) 逐个标签处理：丢弃危险标签，清理其余标签上的事件属性与 javascript: 链接
+    out = out.replace(/<[^>]*>/g, (tag: string) => {
+      if (/^<\s*\/?\s*(script|iframe|object|embed|style|link|meta|base|form)\b/i.test(tag)) {
+        return '';
+      }
+      return tag
+        .replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+        .replace(/(href|src|action|formaction)\s*=\s*(?:"\s*javascript:[^"]*"|'\s*javascript:[^']*'|\s*javascript:[^\s>]*)/gi, '$1=""');
+    });
+    return out;
   }
 
   /**
@@ -55,7 +80,8 @@ export class ExportService {
   static async toHtml(context: common.UIAbilityContext, md: string): Promise<string> {
     let body: string;
     try {
-      body = marked(md) as string;
+      // 导出前消毒，防止文档中的原始 HTML（script/事件属性/js 协议）在浏览器执行
+      body = ExportService.sanitizeHtml(marked(md) as string);
     } catch (e) {
       body = `<pre>${md.replace(/</g, '&lt;')}</pre>`;
     }

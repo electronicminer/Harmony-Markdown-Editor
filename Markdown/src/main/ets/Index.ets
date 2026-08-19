@@ -38,6 +38,14 @@ export class MarkdownOptionsClass {
   inlineLineSpacing?: LengthMetrics
   maxLines?: number
 
+  // 交互回调随各 Markdown 组件实例的 options 流转。
+  // 此前这些回调挂在模块级 markdown 命名空间上，多个 Markdown 实例（首页/编辑器）
+  // 同时存在时会互相覆盖，且闭包持有页面引用导致页面无法被 GC。
+  linkClick?: OnClick = undefined
+  imageClick?: OnClick = undefined
+  customInlineBuilder?: (tokenItem: Token, params: InlineParams) => void = undefined
+  customBlockBuilder?: WrappedBuilder<[Token, MarkdownOptionsClass]> = undefined
+
   constructor(theme?: MarkdownTheme) {
     this.theme = theme ?? defaultTheme
   }

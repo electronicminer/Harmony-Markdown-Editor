@@ -28,7 +28,8 @@ export struct Inline {
     parseInlineToken({
       token: this.token,
       theme: this.options.theme,
-      uiContext: this.getUIContext()
+      uiContext: this.getUIContext(),
+      options: this.options
     }).then((data) => {
       this.inlineTextController.setStyledString(data)
     })

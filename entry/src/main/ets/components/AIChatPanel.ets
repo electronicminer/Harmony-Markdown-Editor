@@ -29,7 +29,9 @@ export struct AIChatPanel {
   context: common.UIAbilityContext = {} as common.UIAbilityContext;
   onInsertMarkdown: (markdown: string) => void = () => {};
   onApplyPlan?: (plan: AgentPlan) => void;
-  currentContent: string = '';
+  // 文档当前内容快照：必须用 @Prop 随父组件 markdownText 同步，
+  // 否则 AI 生成的行号/锚点基于过期文档，应用计划时会错行
+  @Prop currentContent: string = '';
   
   @State messages: ChatMessage[] = [];
   @State pendingPlan: AgentPlan | null = null;
@@ -62,6 +64,14 @@ export struct AIChatPanel {
         role: 'assistant',
         content: '你好！我是你的 Markdown 写作助手，有什么可以帮你的吗？\n\n你可以问我：\n• Markdown 语法问题\n• 写作优化建议\n• 模板示例（表格、代码块等）'
       }];
+    }
+  }
+
+  aboutToDisappear() {
+    // 组件销毁时释放语音识别引擎，避免 native 资源泄漏
+    if (this.speechEngine) {
+      try { this.speechEngine.shutdown(); } catch {}
+      this.speechEngine = null;
     }
   }
 
@@ -264,6 +274,11 @@ export struct AIChatPanel {
       });
     } catch (e) {
       const err: BusinessError = e as BusinessError;
+      // 引擎已创建但 startListening 失败时同样要释放
+      if (this.speechEngine) {
+        try { this.speechEngine.shutdown(); } catch {}
+        this.speechEngine = null;
+      }
       promptAction.showToast({ message: '录音启动失败: ' + err.message, duration: 2000 });
       this.isRecording = false;
     }

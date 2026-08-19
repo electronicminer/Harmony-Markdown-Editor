@@ -26,8 +26,18 @@ export struct Table {
 
     Scroll() {
       Column() {
-        TableHeader({ tokens: this.token?.header, itemMaxWidth: this.itemMaxWidth, theme: this.options.theme })
-        TableBody({ tokens: this.token?.rows, itemMaxWidth: this.itemMaxWidth, theme: this.options.theme })
+        TableHeader({
+          tokens: this.token?.header,
+          itemMaxWidth: this.itemMaxWidth,
+          theme: this.options.theme,
+          options: this.options
+        })
+        TableBody({
+          tokens: this.token?.rows,
+          itemMaxWidth: this.itemMaxWidth,
+          theme: this.options.theme,
+          options: this.options
+        })
       }.alignItems(HorizontalAlign.Start)
     }
     .scrollable(ScrollDirection.Horizontal)
@@ -44,6 +54,7 @@ export struct TableHeader {
   @Param @Require tokens: Tokens.TableCell[]
   @Param @Require theme: MarkdownTheme
   @Param @Require itemMaxWidth: Map<number, number>
+  @Param options?: MarkdownOptionsClass
 
 
   build() {
@@ -55,7 +66,8 @@ export struct TableHeader {
           itemMaxWidth: this.itemMaxWidth,
           index: index,
           theme: this.theme,
-          bold: true
+          bold: true,
+          options: this.options
         })
 
         if (index != this.tokens.length - 1) {
@@ -81,6 +93,7 @@ struct TableBody {
   @Param @Require tokens: Tokens.TableCell[][]
   @Param @Require theme: MarkdownTheme
   @Param @Require itemMaxWidth: Map<number, number>
+  @Param options?: MarkdownOptionsClass
 
   build() {
     Column() {
@@ -92,7 +105,8 @@ struct TableBody {
               tableCell: item,
               itemMaxWidth: this.itemMaxWidth,
               index: index,
-              theme: this.theme
+              theme: this.theme,
+              options: this.options
             })
 
             if (index != row.length - 1) {
@@ -124,6 +138,7 @@ export struct TableInline {
   @Param @Require itemMaxWidth: Map<number, number>
   @Param @Require theme: MarkdownTheme
   @Param bold: boolean = false
+  @Param options?: MarkdownOptionsClass
   @Consumer() _mdInlineModifier?: AttributeModifier<TextAttribute>
   inlineTextController = new TextController()
 
@@ -137,7 +152,8 @@ export struct TableInline {
       token: this.tableCell.tokens ?? [],
       theme: this.theme,
       // fontStyle: this.theme.fontStyle!,
-      uiContext: this.getUIContext()
+      uiContext: this.getUIContext(),
+      options: this.options
     }).then((data) => {
       this.inlineTextController.setStyledString(data)
     })

@@ -130,8 +130,11 @@ export class VersionService {
         arr.push(versions[i].toJson());
       }
       const file = fs.openSync(path, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
-      fs.writeSync(file.fd, JSON.stringify(arr));
-      fs.closeSync(file);
+      try {
+        fs.writeSync(file.fd, JSON.stringify(arr));
+      } finally {
+        fs.closeSync(file);
+      }
     } catch (e) {
       console.error('[Version] writeVersions failed: ' + (e as Error).message);
     }

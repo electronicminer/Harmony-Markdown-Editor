@@ -53,7 +53,7 @@ export struct MarkdownComponent {
           } else if (repeatItem.item.type === 'blockLatex') {
             Latex({ token: repeatItem.item, options: this.options })
           } else {
-            markdown.customBlockBuilder?.builder(repeatItem.item, this.options)
+            (this.options.customBlockBuilder ?? markdown.customBlockBuilder)?.builder(repeatItem.item, this.options)
           }
         })
 

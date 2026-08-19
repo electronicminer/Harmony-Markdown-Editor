@@ -5,7 +5,10 @@ export interface CodeToken {
   text: string
 }
 
-const stringRegex = /(["'])(?:(?=(\\?))\2.)*?\1/g
+// 匹配带转义的字符串字面量（单/双引号）。
+// 注意：不要使用 (["'])(?:(?=(\\?))\2.)*?\1 一类含嵌套量词的写法，
+// 对未闭合引号 + 长反斜杠串存在灾难性回溯（ReDoS）；当前写法为线性时间。
+const stringRegex = /"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/g
 const commonRegex = (/([(\s=){}."])/gi)
 
 function splitOne(code: CodeToken, token: CodeToken): CodeToken[] {
