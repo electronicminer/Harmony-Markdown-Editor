@@ -54,7 +54,7 @@ export struct TableHeader {
   @Param @Require tokens: Tokens.TableCell[]
   @Param @Require theme: MarkdownTheme
   @Param @Require itemMaxWidth: Map<number, number>
-  @Param options?: MarkdownOptionsClass
+  @Param @Require options: MarkdownOptionsClass
 
 
   build() {
@@ -93,7 +93,7 @@ struct TableBody {
   @Param @Require tokens: Tokens.TableCell[][]
   @Param @Require theme: MarkdownTheme
   @Param @Require itemMaxWidth: Map<number, number>
-  @Param options?: MarkdownOptionsClass
+  @Param @Require options: MarkdownOptionsClass
 
   build() {
     Column() {
@@ -138,7 +138,7 @@ export struct TableInline {
   @Param @Require itemMaxWidth: Map<number, number>
   @Param @Require theme: MarkdownTheme
   @Param bold: boolean = false
-  @Param options?: MarkdownOptionsClass
+  @Param @Require options: MarkdownOptionsClass
   @Consumer() _mdInlineModifier?: AttributeModifier<TextAttribute>
   inlineTextController = new TextController()
 

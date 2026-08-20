@@ -21,7 +21,7 @@ export class PreferencesUtil {
   private static readonly KEY_AI_ENABLED = 'aiEnabled';
 
   // Asset Store 中 API Key 的别名（Asset 数据不随系统备份导出）
-  private static readonly ASSET_ALIAS_AI_API_KEY = 'HMarkdown_ai_api_key';
+  private static readonly ASSET_ALIAS_AI_API_KEY: string = 'HMarkdown_ai_api_key';
 
   // Cloud Doc Map Key（本地文件URI → 云端文档ID 映射）
   private static readonly KEY_CLOUD_DOC_MAP = 'cloudDocMap';
@@ -160,10 +160,15 @@ export class PreferencesUtil {
   
   // API Key 属敏感凭据：改用 Asset Store Kit 存储（系统加密且不随备份导出），
   // 不再写入明文 Preferences（旧值在首次读取时自动迁移并删除）。
+  // 注意：Asset 的 ALIAS 标签值类型为字节数组（Uint8Array），需将字符串别名编码后使用。
+  private static aliasBytes(): Uint8Array {
+    return util.TextEncoder.create('utf-8').encodeInto(PreferencesUtil.ASSET_ALIAS_AI_API_KEY);
+  }
+
   static async saveAIConfigApiKey(context: common.UIAbilityContext, key: string) {
     const encoder = util.TextEncoder.create('utf-8');
     const query: asset.AssetMap = new Map();
-    query.set(asset.Tag.ALIAS, PreferencesUtil.ASSET_ALIAS_AI_API_KEY);
+    query.set(asset.Tag.ALIAS, PreferencesUtil.aliasBytes());
     try {
       if (!key) {
         // 清空则移除资产
@@ -176,7 +181,7 @@ export class PreferencesUtil {
       }
       const secret: Uint8Array = encoder.encodeInto(key);
       const attrs: asset.AssetMap = new Map();
-      attrs.set(asset.Tag.ALIAS, PreferencesUtil.ASSET_ALIAS_AI_API_KEY);
+      attrs.set(asset.Tag.ALIAS, PreferencesUtil.aliasBytes());
       attrs.set(asset.Tag.SECRET, secret);
       try {
         await asset.add(attrs);
@@ -193,7 +198,7 @@ export class PreferencesUtil {
 
   static async getAIConfigApiKey(context: common.UIAbilityContext): Promise<string> {
     const query: asset.AssetMap = new Map();
-    query.set(asset.Tag.ALIAS, PreferencesUtil.ASSET_ALIAS_AI_API_KEY);
+    query.set(asset.Tag.ALIAS, PreferencesUtil.aliasBytes());
     try {
       const res: asset.AssetMap[] = await asset.query(query);
       if (res && res.length > 0) {
