@@ -16,10 +16,56 @@ export interface InlineParams {
   inlineTextStyle?: MutableStyledString,
   isLink?: boolean
   fontWeight?: FontWeight,
+  // 斜体/删除线随递归传播，保证嵌套强调（如 *a ~~b~~ c*）样式正确
+  fontStyle?: FontStyle,
+  lineThrough?: boolean,
   onSpanClick?: () => void
   // 所属 Markdown 组件实例的 options，携带 linkClick/imageClick 等回调，
   // 避免多实例共用模块级回调时互相覆盖
   options?: MarkdownOptionsClass
+}
+
+/**
+ * 追加一段行内文本并应用字体样式（颜色/粗细/斜体/删除线/手势）。
+ * 供 text / strong 等"叶子"分支复用，保证递归传播来的样式被统一应用。
+ */
+function appendStyledText(params: InlineParams, rawText: string): void {
+  const text = clearMarkdown(rawText)
+  const style = params.inlineTextStyle
+  if (!style) {
+    return
+  }
+  const fontColor = params?.isLink ? params.theme?.linkColor : params.theme.fontStyle?.fontColor
+  style.appendStyledString(new MutableStyledString(text, [{
+    start: 0,
+    length: text.length,
+    styledKey: StyledStringKey.FONT,
+    styledValue: new TextStyle({
+      fontColor: fontColor,
+      fontWeight: params?.fontWeight ?? params?.theme?.fontStyle?.fontWeight,
+      fontStyle: params.fontStyle
+    })
+  }, {
+    start: 0,
+    length: text.length,
+    styledKey: StyledStringKey.GESTURE,
+    styledValue: new GestureStyle({ onClick: params.onSpanClick })
+  }]))
+  if (params.lineThrough) {
+    try {
+      style.setStyle({
+        start: style.length - text.length,
+        length: text.length,
+        styledKey: StyledStringKey.DECORATION,
+        styledValue: new DecorationStyle({
+          type: TextDecorationType.LineThrough,
+          color: fontColor,
+          style: TextDecorationStyle.SOLID
+        })
+      })
+    } catch (_) {
+    }
+  }
 }
 
 export async function parseInlineToken(params: InlineParams): Promise<MutableStyledString | undefined> {
@@ -62,7 +108,70 @@ export async function parseInlineToken(params: InlineParams): Promise<MutableSty
           isLink: params.isLink,
           uiContext: params.uiContext,
           onSpanClick: params.onSpanClick,
-          options: params.options
+          options: params.options,
+          fontStyle: params.fontStyle,
+          lineThrough: params.lineThrough
+        })
+      } else {
+        appendStyledText(params, tokenItem.text)
+      }
+    } else if (tokenItem.type === 'del') {
+      if (tokenItem.tokens?.length != 0) {
+        // 嵌套内容递归渲染并传播删除线（~~a **b**~~ 的加粗需保留）
+        await parseInlineToken({
+          token: tokenItem.tokens ?? [],
+          theme: params.theme,
+          inlineTextStyle: params.inlineTextStyle,
+          isLink: params.isLink,
+          uiContext: params.uiContext,
+          onSpanClick: params.onSpanClick,
+          options: params.options,
+          fontWeight: params.fontWeight,
+          fontStyle: params.fontStyle,
+          lineThrough: true
+        })
+      } else {
+        let text = clearMarkdown(tokenItem.text)
+        params.inlineTextStyle.appendStyledString(new MutableStyledString(text,
+          [{
+            start: 0,
+            length: text.length,
+            styledKey: StyledStringKey.DECORATION,
+            styledValue: new DecorationStyle({
+              type: TextDecorationType.LineThrough,
+              color: params?.isLink ? params.theme?.linkColor : params.theme.fontStyle?.fontColor,
+              style: TextDecorationStyle.SOLID
+            })
+          }, {
+            start: 0,
+            length: text.length,
+            styledKey: StyledStringKey.FONT,
+            styledValue: new TextStyle({
+              fontColor: params?.isLink ? params.theme?.linkColor : params.theme.fontStyle?.fontColor,
+            })
+          }, {
+            start: 0,
+            length: text.length,
+            styledKey: StyledStringKey.GESTURE,
+            styledValue: new GestureStyle({ onClick: params.onSpanClick })
+          }]))
+      }
+    } else if (tokenItem.type === 'text') {
+      appendStyledText(params, tokenItem.text)
+    } else if (tokenItem.type === 'em') {
+      if (tokenItem.tokens?.length != 0) {
+        // 嵌套内容递归渲染并传播斜体（*a **b** c* 的加粗需保留）
+        await parseInlineToken({
+          token: tokenItem.tokens ?? [],
+          theme: params.theme,
+          inlineTextStyle: params.inlineTextStyle,
+          isLink: params.isLink,
+          uiContext: params.uiContext,
+          onSpanClick: params.onSpanClick,
+          options: params.options,
+          fontWeight: params.fontWeight,
+          fontStyle: FontStyle.Italic,
+          lineThrough: params.lineThrough
         })
       } else {
         let text = clearMarkdown(tokenItem.text)
@@ -72,9 +181,8 @@ export async function parseInlineToken(params: InlineParams): Promise<MutableSty
             length: text.length,
             styledKey: StyledStringKey.FONT,
             styledValue: new TextStyle({
-              fontColor: params?.isLink ? params.theme?.linkColor :
-                params.theme.fontStyle?.fontColor,
-              fontWeight: params?.fontWeight ?? params?.theme?.fontStyle?.fontWeight
+              fontColor: params?.isLink ? params.theme?.linkColor : params.theme.fontStyle?.fontColor,
+              fontStyle: FontStyle.Italic
             })
           }, {
             start: 0,
@@ -83,68 +191,6 @@ export async function parseInlineToken(params: InlineParams): Promise<MutableSty
             styledValue: new GestureStyle({ onClick: params.onSpanClick })
           }]))
       }
-    } else if (tokenItem.type === 'del') {
-      let text = clearMarkdown(tokenItem.text)
-      params.inlineTextStyle.appendStyledString(new MutableStyledString(text,
-        [{
-          start: 0,
-          length: text.length,
-          styledKey: StyledStringKey.DECORATION,
-          styledValue: new DecorationStyle({
-            type: TextDecorationType.LineThrough,
-            color: params?.isLink ? params.theme?.linkColor : params.theme.fontStyle?.fontColor,
-            style: TextDecorationStyle.SOLID
-          })
-        }, {
-          start: 0,
-          length: text.length,
-          styledKey: StyledStringKey.FONT,
-          styledValue: new TextStyle({
-            fontColor: params?.isLink ? params.theme?.linkColor : params.theme.fontStyle?.fontColor,
-          })
-        }, {
-          start: 0,
-          length: text.length,
-          styledKey: StyledStringKey.GESTURE,
-          styledValue: new GestureStyle({ onClick: params.onSpanClick })
-        }]))
-    } else if (tokenItem.type === 'text') {
-      let text = clearMarkdown(tokenItem.text)
-
-      params.inlineTextStyle.appendStyledString(new MutableStyledString(text,
-        [{
-          start: 0,
-          length: text.length,
-          styledKey: StyledStringKey.FONT,
-          styledValue: new TextStyle({
-            fontColor: params?.isLink ? params.theme?.linkColor : params.theme.fontStyle?.fontColor,
-            fontWeight: params?.fontWeight ?? params?.theme?.fontStyle?.fontWeight
-          })
-        }, {
-          start: 0,
-          length: text.length,
-          styledKey: StyledStringKey.GESTURE,
-          styledValue: new GestureStyle({ onClick: params.onSpanClick })
-        }]))
-
-
-    } else if (tokenItem.type === 'em') {
-      let text = clearMarkdown(tokenItem.text)
-      params.inlineTextStyle.appendStyledString(new MutableStyledString(text,
-        [{
-          start: 0,
-          length: text.length,
-          styledKey: StyledStringKey.FONT,
-          styledValue: new TextStyle({
-            fontColor: params?.isLink ? params.theme?.linkColor : params.theme.fontStyle?.fontColor,
-            fontStyle: FontStyle.Italic
-          })
-        }, {
-          start: 0,
-          length: text.length,
-          styledKey: StyledStringKey.GESTURE,
-          styledValue: new GestureStyle({ onClick: params.onSpanClick })
-        }]))
     } else if (tokenItem.type === 'codespan') {
       let codeSpan = `  ${clearMarkdown(tokenItem.text)}  `
       params.inlineTextStyle.appendStyledString(new MutableStyledString(codeSpan,
@@ -175,7 +221,9 @@ export async function parseInlineToken(params: InlineParams): Promise<MutableSty
         onSpanClick: () => {
           (params.options?.linkClick ?? markdown.registerLinkClick)?.(tokenItem['href'])
         },
-        options: params.options
+        options: params.options,
+        fontStyle: params.fontStyle,
+        lineThrough: params.lineThrough
       })
     } else if (tokenItem.type === 'sup' || tokenItem.type === 'sub') {
       if (tokenItem.tokens?.length != 0) {

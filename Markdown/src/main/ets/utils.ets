@@ -37,18 +37,64 @@ export function isFirstCharDigit(str: string): boolean {
   return /^\d/.test(str.charAt(0));
 }
 
-@Concurrent
-export function parseMarkdown(content: string, markedOptions?: MarkedOptions, markedExtensions?: TokenizerExtension[]): Token[] {
+function buildMarkedInstance(markedOptions?: MarkedOptions, markedExtensions?: TokenizerExtension[]): Marked {
   const marked = new Marked()
   let extensions = markedExtensions ?? []
   extensions.push(latexBlock(), latexInline(), superscriptExtension, subscriptExtension)
   marked.setOptions(markedOptions)
   marked.use({ extensions: extensions })
+  return marked
+}
 
-  if (content) {
-    return marked.lexer(content)
+/**
+ * 主线程同步解析入口：供含函数成员的 options/extensions 使用
+ * （taskpool 参数必须可序列化，函数无法跨线程传递，此时只能回退主线程解析）。
+ */
+export function parseMarkdownSync(content: string, markedOptions?: MarkedOptions,
+  markedExtensions?: TokenizerExtension[]): Token[] {
+  if (!content) {
+    return []
   }
-  return []
+  return buildMarkedInstance(markedOptions, markedExtensions).lexer(content)
+}
+
+/**
+ * 深度检测配置对象中是否含函数成员（限制层数防循环引用）。
+ * 用于决定 Markdown 解析能否走 taskpool 子线程。
+ */
+export function hasFunctionMember(value: Object | undefined | null, depth: number = 0): boolean {
+  if (value === undefined || value === null || depth > 5) {
+    return false
+  }
+  const valueType = typeof value
+  if (valueType === 'function') {
+    return true
+  }
+  if (valueType !== 'object') {
+    return false
+  }
+  if (value instanceof Array) {
+    const arr = value as Array<Object>
+    for (let i = 0; i < arr.length; i++) {
+      if (hasFunctionMember(arr[i], depth + 1)) {
+        return true
+      }
+    }
+    return false
+  }
+  const record = value as Record<string, Object>
+  const keys = Object.keys(record)
+  for (let i = 0; i < keys.length; i++) {
+    if (hasFunctionMember(record[keys[i]], depth + 1)) {
+      return true
+    }
+  }
+  return false
+}
+
+@Concurrent
+export function parseMarkdown(content: string, markedOptions?: MarkedOptions, markedExtensions?: TokenizerExtension[]): Token[] {
+  return parseMarkdownSync(content, markedOptions, markedExtensions)
 }
 
 export function textAlign(align?: 'center' | 'left' | 'right' | null) {

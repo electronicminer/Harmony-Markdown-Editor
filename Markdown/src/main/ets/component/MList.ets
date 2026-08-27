@@ -5,6 +5,8 @@
  */
 import { Token, Tokens } from '../core'
 import { Inline } from './Inline'
+import { BlockQuote } from './BlockQuote'
+import { Code } from './Code'
 import { MarkdownOptionsClass } from '../Index'
 
 @ComponentV2
@@ -34,8 +36,18 @@ export struct MList {
                   .padding({ left: this.options.theme.listStyle?.marginLeft })
               } else if (itemChild.type === 'space') {
                 Stack()
+              } else if (itemChild.type === 'code') {
+                // 列表项内的代码块：此前落入 else 分支被当作行内内容，
+                // code token 无 tokens 字段导致内容丢失/报错
+                Code({ token: itemChild as Tokens.Code, options: this.options })
+              } else if (itemChild.type === 'blockquote') {
+                // 列表项内的引用块
+                BlockQuote({ token: itemChild as Tokens.Blockquote, options: this.options })
+              } else if (itemChild.type === 'html') {
+                // 与顶层 MarkdownComponent 的处理保持一致：HTML 块暂不渲染
               } else {
-                Inline({ token: itemChild['tokens'], options: this.options })
+                // 兜底防 undefined：无 tokens 字段的块级 token 不再传入 Inline
+                Inline({ token: itemChild['tokens'] ?? [], options: this.options })
               }
             }, (item: Token) => item.raw)
           }.layoutWeight(1)

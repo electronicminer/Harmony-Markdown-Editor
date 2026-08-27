@@ -41,7 +41,7 @@ export struct MarkdownComponent {
             })
           } else if (repeatItem.item.type === 'text') {
             Inline({
-              token: (this.tokenList[0] as Tokens.Text).tokens,
+              token: (repeatItem.item as Tokens.Text).tokens ?? [],
               options: this.options
             })
           } else if (repeatItem.item.type === 'table') {

@@ -1,6 +1,6 @@
 import { Token } from './core'
 import { MarkdownComponent } from './component/MarkdownComponent'
-import { parseMarkdown } from './utils'
+import { parseMarkdown, parseMarkdownSync, hasFunctionMember } from './utils'
 import { MarkdownOptions, MarkdownOptionsClass } from './Index'
 import { defaultDarkTheme, defaultTheme } from './config/DefaultTheme'
 import { LengthMetrics } from '@kit.ArkUI'
@@ -45,17 +45,30 @@ export struct Markdown {
     if (this.content && this.content.trim().length !== 0) {
       this.onLoading?.()
       const seq = ++this.parseSeq
-      taskpool.execute(parseMarkdown, this.content, this.options?.options, this.options?.extensions).then((data) => {
-        if (seq !== this.parseSeq) {
-          return // 已有更新的 content 发起解析，丢弃本次旧结果
+      const markedOptions = this.options?.options
+      const markedExtensions = this.options?.extensions
+      if (hasFunctionMember(markedOptions) || hasFunctionMember(markedExtensions)) {
+        // options/extensions 含函数成员（tokenizer/hooks 等无法跨线程序列化），
+        // 回退主线程同步解析，避免 taskpool.execute 抛运行时错误
+        try {
+          this.tokenList = parseMarkdownSync(this.content, markedOptions, markedExtensions)
+          this.onSuccess?.()
+        } catch (e) {
+          this.onError?.(e as BusinessError)
         }
-        this.tokenList = data as Token[]
-        this.onSuccess?.()
-      }).catch((e: BusinessError) => {
-        if (seq === this.parseSeq) {
-          this.onError?.(e)
-        }
-      })
+      } else {
+        taskpool.execute(parseMarkdown, this.content, markedOptions, markedExtensions).then((data) => {
+          if (seq !== this.parseSeq) {
+            return // 已有更新的 content 发起解析，丢弃本次旧结果
+          }
+          this.tokenList = data as Token[]
+          this.onSuccess?.()
+        }).catch((e: BusinessError) => {
+          if (seq === this.parseSeq) {
+            this.onError?.(e)
+          }
+        })
+      }
     } else {
       // content 置空时清理渲染，避免预览区残留上一个文档
       this.parseSeq++
