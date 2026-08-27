@@ -59,6 +59,26 @@ export function parseMarkdownSync(content: string, markedOptions?: MarkedOptions
 }
 
 /**
+ * taskpool 子线程解析入口。
+ * 注意：@Concurrent 函数只能引用导入变量和局部变量，不能调用同文件的
+ * parseMarkdownSync/buildMarkedInstance，因此此处必须内联解析逻辑
+ * （与 parseMarkdownSync 保持一致，改动时需同步两处）。
+ */
+@Concurrent
+export function parseMarkdown(content: string, markedOptions?: MarkedOptions, markedExtensions?: TokenizerExtension[]): Token[] {
+  const marked = new Marked()
+  let extensions = markedExtensions ?? []
+  extensions.push(latexBlock(), latexInline(), superscriptExtension, subscriptExtension)
+  marked.setOptions(markedOptions)
+  marked.use({ extensions: extensions })
+
+  if (content) {
+    return marked.lexer(content)
+  }
+  return []
+}
+
+/**
  * 深度检测配置对象中是否含函数成员（限制层数防循环引用）。
  * 用于决定 Markdown 解析能否走 taskpool 子线程。
  */
@@ -90,11 +110,6 @@ export function hasFunctionMember(value: Object | undefined | null, depth: numbe
     }
   }
   return false
-}
-
-@Concurrent
-export function parseMarkdown(content: string, markedOptions?: MarkedOptions, markedExtensions?: TokenizerExtension[]): Token[] {
-  return parseMarkdownSync(content, markedOptions, markedExtensions)
 }
 
 export function textAlign(align?: 'center' | 'left' | 'right' | null) {
