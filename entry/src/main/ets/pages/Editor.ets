@@ -2,7 +2,7 @@ import { Markdown } from '@lidary/markdown';
 import { common, ConfigurationConstant } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { util } from '@kit.ArkTS';
-import { promptAction, router } from '@kit.ArkUI';
+import { promptAction, router, mediaquery } from '@kit.ArkUI';
 import { picker, fileIo as fs } from '@kit.CoreFileKit';
 import { webview } from '@kit.ArkWeb';
 import { marked } from '@lidary/markdown';
@@ -162,6 +162,9 @@ struct Editor {
   @State autoSave: boolean = false
   @State autoSaveInterval: number = 60
   @State viewMode: number = 0 // 0: Split, 1: Edit Only, 2: Preview Only
+  // 手机窄屏适配：<600vp 视为手机布局，禁用分屏、AI 面板改为全屏浮层
+  @State isPhoneLayout: boolean = false;
+  private phoneMediaListener: mediaquery.MediaQueryListener | null = null;
   @State hasUnsavedChanges: boolean = false // #1 dirty flag
   @State saveStatus: string = '' // 保存状态指示文本，如「已自动保存 14:30」
   @State followSystem: boolean = false
@@ -631,6 +634,18 @@ struct Editor {
   }
 
   aboutToAppear(): void {
+    // 手机窄屏检测（旋转/折叠屏切换时同步更新）
+    const listener = mediaquery.matchMediaSync('(max-width: 600vp)');
+    this.isPhoneLayout = listener.matches;
+    listener.on('change', (result: mediaquery.MediaQueryResult) => {
+      this.isPhoneLayout = result.matches;
+      // 窄屏禁用分屏：两栏各不足 180vp 无法使用
+      if (this.isPhoneLayout && this.viewMode === 0) {
+        this.viewMode = 1;
+      }
+    });
+    this.phoneMediaListener = listener;
+
     const params = router.getParams() as Record<string, Object>;
     // 显式传入空内容（如新建的空云端文档）有效，不能用 truthy 判断
     let hasContentParam: boolean = false;
@@ -684,6 +699,11 @@ struct Editor {
         })
       }
     })
+
+    // 手机窄屏下分屏不可用，钳制为仅编辑
+    if (this.isPhoneLayout && this.viewMode === 0) {
+      this.viewMode = 1;
+    }
     
     if (!hasContentParam || this.markdownText === '# Hello World\n\nStart writing your Markdown here...') {
        // 未传内容参数时尝试加载保存的文档，如果没有则加载默认文档；
@@ -758,6 +778,9 @@ struct Editor {
       clearInterval(this.autoSaveTimer);
       this.autoSaveTimer = -1;
     }
+    // 清理媒体查询监听，避免持有页面引用
+    this.phoneMediaListener?.off('change');
+    this.phoneMediaListener = null;
   }
 
   // #9 onPageHide 时刷新待保存内容
@@ -1468,8 +1491,8 @@ struct Editor {
           .clip(true)
         }
 
-        // 第二道 分隔线（仅在启用了 AI 时显示）
-        if (this.aiEnabled) {
+        // 第二道 分隔线（仅在启用了 AI 且为宽屏三栏布局时显示）
+        if (this.aiEnabled && !this.isPhoneLayout) {
           this.DividerBar(() => {
             // #7 记录拖拽起始快照
             this.dragStartEditorWeight = this.editorWeight;
@@ -1500,8 +1523,8 @@ struct Editor {
           })
         }
 
-        // 第三列：最右侧 AI 面板
-        if (this.aiEnabled) {
+        // 第三列：最右侧 AI 面板（窄屏改为全屏浮层，见 build 顶层 Stack）
+        if (this.aiEnabled && !this.isPhoneLayout) {
           Column() {
             AIChatPanel({
               isDark: this.isDark,
@@ -1585,9 +1608,34 @@ struct Editor {
       .width('100%')
       .height('100%')
 
+      // 手机窄屏：AI 面板全屏浮层（盖住编辑区，顶部留出工具栏胶囊可点 🤖 关闭）
+      if (this.aiEnabled && this.isPhoneLayout) {
+        Column() {
+          AIChatPanel({
+            isDark: this.isDark,
+            aiEnabled: this.aiEnabled,
+            aiConfig: this.aiConfig,
+            aiConfigVersion: this.aiConfigVersion,
+            context: this.context,
+            currentContent: this.markdownText,
+            onApplyPlan: (plan: AgentPlan) => {
+              this.handleApplyPlan(plan);
+            },
+            onInsertMarkdown: (markdown: string) => {
+              this.insertText(markdown + '\n');
+            }
+          })
+        }
+        .width('100%')
+        .height('100%')
+        .padding({ top: 100 }) // 顶部留出悬浮胶囊空间
+        .backgroundColor(this.isDark ? '#F20B0B0B' : '#F2F1F3F5')
+        .zIndex(10)
+      }
+
       // 补全弹窗组件已注释禁用
 
-      // 顶层：合并导航栏 + 工具栏为单行胶囊
+      // 顶层：合并导航栏 + 工具栏为单行胶囊（zIndex 高于 AI 浮层，保证胶囊始终可操作）
       Column() {
         Row() {
           // 左侧：返回按钮 + Editor 标签
@@ -1619,6 +1667,19 @@ struct Editor {
               this.ToolButton('Image', () => { this.insertText('![alt](image-url)') })
               this.ToolButton('UL', () => { this.insertText('- ') })
               this.ToolButton('OL', () => { this.insertText('1. ') })
+              if (this.isPhoneLayout) {
+                // 窄屏：右侧固定区放不下，功能按钮并入可滚动工具区
+                Divider().vertical(true).height(20).color(this.isDark ? '#33FFFFFF' : '#1A000000')
+                this.GlassIconButton('📝', () => { this.templateDialogController.open() })
+                this.GlassIconButton('💾', () => { this.saveFile() })
+                this.GlassIconButton('📤', () => { this.exportDialogController.open() })
+                this.GlassIconButton(this.isCloudSyncing ? '⏳' : '☁️', () => {
+                  if (!this.isCloudSyncing) this.cloudSave()
+                })
+                this.GlassIconButton('🔗', () => { this.openShareDialog() })
+                this.GlassIconButton('⏱️', () => { this.openVersionHistory() })
+                this.GlassIconButton('🔍', () => { this.openFindReplace() })
+              }
             }
             .padding({ left: 8, right: 8 })
           }
@@ -1638,7 +1699,7 @@ struct Editor {
                 });
               }
             })
-            // #14 视图模式分段控件 — 玻璃胶囊风格，融入工具栏
+            // #14 视图模式分段控件 — 玻璃胶囊风格，融入工具栏（窄屏隐藏"分屏"）
             Row({ space: 0 }) {
               Button('编辑')
                 .fontSize(13)
@@ -1650,16 +1711,18 @@ struct Editor {
                 .borderRadius(20)
                 .onClick(() => { this.viewMode = 1; })
                 .animation({ duration: 200, curve: Curve.EaseInOut })
-              Button('分屏')
-                .fontSize(13)
-                .fontWeight(FontWeight.Medium)
-                .height(32)
-                .padding({ left: 14, right: 14 })
-                .fontColor(this.viewMode === 0 ? Color.White : (this.isDark ? '#99FFFFFF' : '#99000000'))
-                .backgroundColor(this.viewMode === 0 ? '#0A59F7' : 'transparent')
-                .borderRadius(20)
-                .onClick(() => { this.viewMode = 0; })
-                .animation({ duration: 200, curve: Curve.EaseInOut })
+              if (!this.isPhoneLayout) {
+                Button('分屏')
+                  .fontSize(13)
+                  .fontWeight(FontWeight.Medium)
+                  .height(32)
+                  .padding({ left: 14, right: 14 })
+                  .fontColor(this.viewMode === 0 ? Color.White : (this.isDark ? '#99FFFFFF' : '#99000000'))
+                  .backgroundColor(this.viewMode === 0 ? '#0A59F7' : 'transparent')
+                  .borderRadius(20)
+                  .onClick(() => { this.viewMode = 0; })
+                  .animation({ duration: 200, curve: Curve.EaseInOut })
+              }
               Button('预览')
                 .fontSize(13)
                 .fontWeight(FontWeight.Medium)
@@ -1675,27 +1738,30 @@ struct Editor {
             .borderRadius(22)
             .backgroundColor(this.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)')
             .backdropBlur(50)
-            this.GlassIconButton('📝', () => {
-              this.templateDialogController.open();
-            })
-            this.GlassIconButton('💾', () => {
-              this.saveFile()
-            })
-            this.GlassIconButton('📤', () => {
-              this.exportDialogController.open()
-            })
-            this.GlassIconButton(this.isCloudSyncing ? '⏳' : '☁️', () => {
-              if (!this.isCloudSyncing) this.cloudSave()
-            })
-            this.GlassIconButton('🔗', () => {
-              this.openShareDialog()
-            })
-            this.GlassIconButton('⏱️', () => {
-              this.openVersionHistory()
-            })
-            this.GlassIconButton('🔍', () => {
-              this.openFindReplace()
-            })
+            if (!this.isPhoneLayout) {
+              // 窄屏时这些按钮已并入中间可滚动工具区
+              this.GlassIconButton('📝', () => {
+                this.templateDialogController.open();
+              })
+              this.GlassIconButton('💾', () => {
+                this.saveFile()
+              })
+              this.GlassIconButton('📤', () => {
+                this.exportDialogController.open()
+              })
+              this.GlassIconButton(this.isCloudSyncing ? '⏳' : '☁️', () => {
+                if (!this.isCloudSyncing) this.cloudSave()
+              })
+              this.GlassIconButton('🔗', () => {
+                this.openShareDialog()
+              })
+              this.GlassIconButton('⏱️', () => {
+                this.openVersionHistory()
+              })
+              this.GlassIconButton('🔍', () => {
+                this.openFindReplace()
+              })
+            }
             this.GlassIconButton(this.isDark ? '☀️' : '🌙', () => {
               const context = getContext(this) as common.UIAbilityContext;
               if (this.followSystem) {
@@ -1718,7 +1784,7 @@ struct Editor {
       }
       .width('100%')
       .alignItems(HorizontalAlign.Center)
-      .zIndex(10)
+      .zIndex(30) // 高于手机端 AI 浮层(10)与查找栏(20)，悬浮胶囊始终可操作
     }
     .width('100%')
     .height('100%')

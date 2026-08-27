@@ -2,7 +2,7 @@ import { Markdown } from '@lidary/markdown';
 import { common, ConfigurationConstant } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { util } from '@kit.ArkTS';
-import { router } from '@kit.ArkUI'; 
+import { router, mediaquery } from '@kit.ArkUI';
 import { picker, fileIo as fs } from '@kit.CoreFileKit';
 import { PreferencesUtil } from '../utils/PreferencesUtil';
 import { AIConfigClass } from '../utils/AIConfig';
@@ -420,6 +420,9 @@ struct Index {
   @State autoSave: boolean = false;
   @State autoSaveInterval: number = 60;
   @State defaultViewMode: number = 0;
+  // 手机窄屏适配：<600vp 时顶栏按钮区改为横向可滚动
+  @State isPhoneLayout: boolean = false;
+  private phoneMediaListener: mediaquery.MediaQueryListener | null = null;
   @State @Watch('onFollowSystemChange') followSystem: boolean = false;
   @StorageProp('currentColorMode') @Watch('onSystemModeChange') currentSystemMode: number = ConfigurationConstant.ColorMode.COLOR_MODE_LIGHT;
   private fileUri: string = '';
@@ -519,7 +522,15 @@ struct Index {
   async aboutToAppear() {
     // 这里不再初始化 Controller，直接走业务逻辑
     const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
-    
+
+    // 手机窄屏检测（旋转/折叠屏切换时同步更新）
+    const listener = mediaquery.matchMediaSync('(max-width: 600vp)');
+    this.isPhoneLayout = listener.matches;
+    listener.on('change', (result: mediaquery.MediaQueryResult) => {
+      this.isPhoneLayout = result.matches;
+    });
+    this.phoneMediaListener = listener;
+
     try {
       this.isDark = await PreferencesUtil.getIsDark(context);
       this.openLastFile = await PreferencesUtil.getOpenLastFile(context);
@@ -682,6 +693,93 @@ struct Index {
   }
 
   @Builder
+  TopActionButtons() {
+    // 设置
+    this.GlassButton('⚙️', () => {
+      if (this.dialogController) {
+        this.dialogController.open();
+      }
+    });
+
+    // 主题切换
+    this.GlassButton(this.isDark ? '☀️' : '🌙', () => {
+      if (this.followSystem) {
+        this.followSystem = false;
+      }
+      this.isDark = !this.isDark;
+      this.savePreferences();
+    });
+
+    // 打开文件
+    this.GlassButton('📂', () => {
+      this.openFile();
+    });
+
+    // 新建文件
+    this.GlassButton('+', () => {
+      try {
+        router.pushUrl({
+          url: 'pages/Editor',
+          params: {
+            content: '# ',
+            uri: '',
+            isDark: this.isDark,
+            viewMode: this.defaultViewMode
+          }
+        });
+      } catch (error) {
+        const e = error as BusinessError;
+        console.error('pushUrl error: ' + e.message);
+      }
+    }, false, 24);
+
+    // 笔记模板
+    this.GlassButton('📝', () => {
+      this.templateDialogController.open();
+    });
+
+    // 编辑当前文件
+    this.GlassButton('✏️', () => {
+      try {
+        router.pushUrl({
+          url: 'pages/Editor',
+          params: {
+            content: this.text,
+            uri: this.fileUri,
+            isDark: this.isDark,
+            viewMode: this.defaultViewMode
+          }
+        });
+      } catch (error) {
+        const e = error as BusinessError;
+        console.error('pushUrl error: ' + e.message);
+      }
+    }, true);
+
+    // 云文档
+    this.GlassButton('☁️', () => {
+      try {
+        router.pushUrl({ url: 'pages/CloudDocsPage', params: { isDark: this.isDark } });
+      } catch (error) {
+        const e = error as BusinessError;
+        console.error('pushUrl error: ' + e.message);
+      }
+    }, false, 20);
+
+    // 账号入口
+    this.GlassButton('👤', () => {
+      try {
+        router.pushUrl({
+          url: 'pages/RegisterPage'
+        });
+      } catch (error) {
+        const e = error as BusinessError;
+        console.error('pushUrl error: ' + e.message);
+      }
+    }, false, 20);
+  }
+
+  @Builder
   GlassButton(icon: string, action: () => void, isPrimary: boolean = false, fontSize: number = 20) {
     Button({ type: ButtonType.Circle, stateEffect: true }) {
       Text(icon)
@@ -760,96 +858,27 @@ struct Index {
       // 顶层：悬浮的玻璃状态栏/导航栏
       Row() {
         Text('鸿蒙 Markdown')
-          .fontSize(28)
+          .fontSize(this.isPhoneLayout ? 22 : 28)
           .fontWeight(FontWeight.Bold)
           .fontFamily('HarmonyOS Sans')
           .fontColor(this.isDark ? '#E5FFFFFF' : '#E5000000')
+          .maxLines(1)
+          .layoutWeight(this.isPhoneLayout ? 0 : 1)
+
+        if (this.isPhoneLayout) {
+          // 窄屏：按钮区整体改为横向可滚动，避免 8 个按钮溢出屏幕
+          Scroll() {
+            Row({ space: 12 }) {
+              this.TopActionButtons()
+            }
+          }
+          .scrollable(ScrollDirection.Horizontal)
+          .scrollBar(BarState.Off)
           .layoutWeight(1)
-
-        Row({ space: 12 }) {
-          // 设置
-          this.GlassButton('⚙️', () => {
-            if (this.dialogController) {
-              this.dialogController.open();
-            }
-          });
-
-          // 主题切换
-          this.GlassButton(this.isDark ? '☀️' : '🌙', () => {
-            if (this.followSystem) {
-              this.followSystem = false;
-            }
-            this.isDark = !this.isDark;
-            this.savePreferences();
-          });
-
-          // 打开文件
-          this.GlassButton('📂', () => {
-            this.openFile();
-          });
-
-          // 新建文件
-          this.GlassButton('+', () => {
-            try {
-              router.pushUrl({
-                url: 'pages/Editor',
-                params: {
-                  content: '# ',
-                  uri: '',
-                  isDark: this.isDark,
-                  viewMode: this.defaultViewMode
-                }
-              });
-            } catch (error) {
-              const e = error as BusinessError;
-              console.error('pushUrl error: ' + e.message);
-            }
-          }, false, 24);
-
-          // 笔记模板
-          this.GlassButton('📝', () => {
-            this.templateDialogController.open();
-          });
-
-          // 编辑当前文件
-          this.GlassButton('✏️', () => {
-            try {
-              router.pushUrl({
-                url: 'pages/Editor',
-                params: {
-                  content: this.text,
-                  uri: this.fileUri,
-                  isDark: this.isDark,
-                  viewMode: this.defaultViewMode
-                }
-              });
-            } catch (error) {
-              const e = error as BusinessError;
-              console.error('pushUrl error: ' + e.message);
-            }
-          }, true);
-
-          // 云文档
-          this.GlassButton('☁️', () => {
-            try {
-              router.pushUrl({ url: 'pages/CloudDocsPage', params: { isDark: this.isDark } });
-            } catch (error) {
-              const e = error as BusinessError;
-              console.error('pushUrl error: ' + e.message);
-            }
-          }, false, 20);
-
-          // 账号入口
-          this.GlassButton('👤', () => {
-            try {
-              router.pushUrl({
-                url: 'pages/RegisterPage'
-              });
-            } catch (error) {
-              const e = error as BusinessError;
-              console.error('pushUrl error: ' + e.message);
-            }
-          }, false, 20);
+        } else {
+          Row({ space: 12 }) {
+            this.TopActionButtons()
+          }
         }
       }
       .width('92%')
